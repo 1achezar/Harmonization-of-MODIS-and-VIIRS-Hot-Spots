@@ -11,6 +11,11 @@ namespace Harmonization_of_MODIS_and_VIIRS_Hot_Spots.Controllers
             return View();
         }
 
+        public IActionResult Globe()
+        {
+            return View();
+        }
+
         public IActionResult Privacy()
         {
             return View();

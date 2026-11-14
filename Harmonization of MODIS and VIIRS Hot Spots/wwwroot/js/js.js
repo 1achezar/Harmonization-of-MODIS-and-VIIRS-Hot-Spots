@@ -56,6 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // UI Element References
   const container = document.getElementById('globe-container');
+  if (!container) return;
+
   const togglePlaceBtn = document.getElementById('toggle-place-mode');
   const placeModeLabel = document.getElementById('place-mode-label');
   const labelInput = document.getElementById('fire-label-input');
