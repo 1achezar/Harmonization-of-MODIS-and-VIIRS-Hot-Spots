@@ -6,16 +6,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NasaSpaceAppsChallenge - 3D Globe</title>
+  <title>NasaSpaceAppsChallenge – Interactive Wildfire Globe</title>
 
-  <!-- Tailwind CSS & Lucide Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-
-  <!-- Globe.gl (Three.js 3D Satellite Globe) -->
   <script src="https://unpkg.com/globe.gl"></script>
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -30,11 +26,7 @@
             mono: ['JetBrains Mono', 'monospace'],
           },
           colors: {
-            space: {
-              950: '#060b19',
-              900: '#0b1224',
-              800: '#111a33',
-            }
+            space: { 950: '#060b19', 900: '#0b1224', 800: '#111a33' }
           }
         }
       }
@@ -42,45 +34,199 @@
   </script>
 
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #060b19;
-    }
-    #globe-container canvas {
-      outline: none;
-    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #060b19; }
+    #globe-container canvas { outline: none; }
+
+    /* custom scrollbar for sidebar */
+    .sidebar-scroll { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+    .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+    .sidebar-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
+
+    /* smooth slide-in */
+    aside { animation: slideIn .35s ease; }
+    @@keyframes slideIn { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+
+    /* HUD coords bar */
+    #cursor-coords { font-variant-numeric: tabular-nums; }
+
+    /* intensity range */
+    input[type=range] { accent-color: #f97316; }
+
+    /* legend dot */
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   </style>
 </head>
-<body class="text-slate-100 antialiased selection:bg-cyan-500/30">
+<body class="text-slate-100 antialiased">
 
-  <!-- Globe -->
+  <!-- ── GLOBE CANVAS ── -->
   <div id="globe-container" class="fixed inset-0 z-0"></div>
 
-  <!-- Left panel -->
-  <aside class="fixed top-6 left-4 sm:left-6 z-20 w-64 max-w-[calc(100vw-2rem)] bg-space-950/85 backdrop-blur-xl border border-slate-800/90 rounded-2xl p-5 shadow-2xl space-y-4">
-      <div class="flex items-center justify-between">
-          <span class="text-xs font-mono uppercase tracking-wider text-cyan-400">Date (2000-2026)</span>
-          <a href="/" title="Back to Home" class="text-slate-400 hover:text-cyan-400 transition">
-              <i data-lucide="home" class="w-4 h-4"></i>
-          </a>
+  <!-- ── TOP-RIGHT HUD: COORDS ── -->
+  <div id="cursor-coords"
+       class="fixed top-4 right-4 z-30 px-3 py-1.5 rounded-lg bg-space-950/80 backdrop-blur border border-slate-800/80
+              text-[11px] font-mono text-slate-400 select-none hidden sm:block">
+    Click globe to select
+  </div>
+
+  <!-- ── TOP-RIGHT: BACK HOME ── -->
+  <a href="/"
+     class="fixed top-4 right-4 sm:top-auto sm:bottom-5 sm:right-5 z-30 flex items-center gap-1.5
+            px-3 py-2 rounded-xl bg-space-950/80 backdrop-blur border border-slate-800/80
+            text-xs text-slate-400 hover:text-cyan-400 hover:border-cyan-500/40 transition">
+    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+    Home
+  </a>
+
+  <!-- ── LEFT SIDEBAR ── -->
+  <aside class="fixed top-0 left-0 h-full z-20 w-72 max-w-[88vw]
+                bg-space-950/90 backdrop-blur-2xl border-r border-slate-800/80
+                flex flex-col shadow-2xl">
+
+    <!-- Brand -->
+    <div class="px-5 pt-5 pb-4 border-b border-slate-800/80 flex items-center gap-3 shrink-0">
+      <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+        <i data-lucide="satellite" class="w-4 h-4"></i>
+      </div>
+      <div>
+        <div class="text-xs font-bold text-white tracking-tight leading-none">PyroSync</div>
+        <div class="text-[10px] text-slate-500 font-mono mt-0.5">MODIS + VIIRS Harmonized</div>
+      </div>
+    </div>
+
+    <!-- Scrollable body -->
+    <div class="flex-1 overflow-y-auto sidebar-scroll px-4 py-4 space-y-5">
+
+      <!-- ── SECTION: FLY-TO PRESETS ── -->
+      <div>
+        <span class="block text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-2">Region Presets</span>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button class="fly-btn text-left px-2.5 py-2 rounded-lg bg-space-800/80 border border-slate-700/60
+                         hover:border-cyan-500/40 hover:bg-space-800 transition text-xs text-slate-300"
+                  data-fly="42.5,24.8,0.45">
+            <i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-cyan-500"></i>Balkans
+          </button>
+          <button class="fly-btn text-left px-2.5 py-2 rounded-lg bg-space-800/80 border border-slate-700/60
+                         hover:border-cyan-500/40 hover:bg-space-800 transition text-xs text-slate-300"
+                  data-fly="39.0,22.0,0.3">
+            <i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-cyan-500"></i>Greece
+          </button>
+          <button class="fly-btn text-left px-2.5 py-2 rounded-lg bg-space-800/80 border border-slate-700/60
+                         hover:border-cyan-500/40 hover:bg-space-800 transition text-xs text-slate-300"
+                  data-fly="42.7,25.5,0.25">
+            <i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-cyan-500"></i>Bulgaria
+          </button>
+          <button class="fly-btn text-left px-2.5 py-2 rounded-lg bg-space-800/80 border border-slate-700/60
+                         hover:border-cyan-500/40 hover:bg-space-800 transition text-xs text-slate-300"
+                  data-fly="44.0,21.0,0.3">
+            <i data-lucide="map-pin" class="w-3 h-3 inline mr-1 text-cyan-500"></i>Serbia
+          </button>
+        </div>
       </div>
 
-      <div class="pt-3 border-t border-slate-800/80">
-          <input
-              id="fire-date-input"
-              type="date"
-              value="2026-08-14"
-              min="2000-01-01"
-              max="2026-12-31"
-              class="w-full px-2.5 py-2 rounded-lg bg-space-900 border border-slate-700/80 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-          />
+      <!-- ── SECTION: PLACE MODE ── -->
+      <div class="rounded-xl border border-slate-800/80 bg-space-800/40 p-3.5 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono uppercase tracking-widest text-slate-500">Place Hotspot</span>
+          <button id="toggle-place-mode"
+                  class="px-2.5 py-1 rounded-lg bg-orange-500 text-slate-950 text-[11px] font-bold transition">
+            ON
+          </button>
+        </div>
+        <p id="place-mode-label" class="text-[11px] text-slate-400">Place Mode: ON (Click Globe)</p>
+
+        <!-- Label -->
+        <div>
+          <label class="block text-[11px] font-mono text-slate-500 mb-1">Label</label>
+          <input id="fire-label-input" type="text" placeholder="e.g. Rila Forest Fire"
+                 class="w-full px-2.5 py-2 rounded-lg bg-space-900 border border-slate-700/80
+                        text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-400 transition" />
+        </div>
+
+        <!-- Sensor + Date -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[11px] font-mono text-slate-500 mb-1">Sensor</label>
+            <select id="fire-sensor-select"
+                    class="w-full px-2 py-2 rounded-lg bg-space-900 border border-slate-700/80
+                           text-xs font-mono text-white focus:outline-none focus:border-cyan-400 transition">
+              <option value="VIIRS (375m)">VIIRS</option>
+              <option value="MODIS (1km)">MODIS</option>
+              <option value="Harmonized">Harmonized</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-mono text-slate-500 mb-1">Date</label>
+            <input id="fire-date-input" type="date" value="2026-08-14" min="2000-01-01" max="2026-12-31"
+                   class="w-full px-2 py-2 rounded-lg bg-space-900 border border-slate-700/80
+                          text-xs font-mono text-white focus:outline-none focus:border-cyan-400
+                          [color-scheme:dark] transition" />
+          </div>
+        </div>
+
+        <!-- Intensity slider -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[11px] font-mono text-slate-500">Intensity (FRP)</label>
+            <span id="frp-value-display" class="text-[11px] font-mono text-orange-400 font-semibold">100 MW</span>
+          </div>
+          <input id="fire-intensity-slider" type="range" min="10" max="500" value="100" step="5"
+                 class="w-full h-1.5 rounded-full" />
+          <div class="flex justify-between text-[10px] font-mono text-slate-600 mt-1">
+            <span>10</span><span>500 MW</span>
+          </div>
+        </div>
       </div>
+
+      <!-- ── SECTION: ACTIVE FIRES LIST ── -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-[10px] font-mono uppercase tracking-widest text-slate-500">Active Hotspots</span>
+          <span id="fire-count-badge"
+                class="px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-mono font-semibold border border-orange-500/25">
+            0 Active
+          </span>
+        </div>
+        <div id="placed-fires-list" class="space-y-1.5 max-h-52 overflow-y-auto sidebar-scroll">
+          <div class="text-xs text-slate-600 italic py-2">No hotspots placed.</div>
+        </div>
+      </div>
+
+      <!-- ── SECTION: LEGEND ── -->
+      <div class="rounded-xl border border-slate-800/80 bg-space-800/40 p-3.5">
+        <span class="block text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-2.5">FRP Legend</span>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span class="dot bg-red-500"></span> High ≥ 150 MW
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span class="dot bg-orange-500"></span> Medium 80–149 MW
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span class="dot bg-yellow-400"></span> Low &lt; 80 MW
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer actions -->
+    <div class="shrink-0 px-4 py-4 border-t border-slate-800/80 flex gap-2">
+      <button id="export-fires-json"
+              class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
+                     bg-space-800 border border-slate-700/60 hover:border-cyan-500/50
+                     text-xs text-slate-300 hover:text-cyan-400 transition font-medium">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
+      </button>
+      <button id="clear-fires-btn"
+              class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
+                     bg-space-800 border border-slate-700/60 hover:border-rose-500/50
+                     text-xs text-slate-300 hover:text-rose-400 transition font-medium">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear All
+      </button>
+    </div>
   </aside>
 
-  <script src="~/js/globe.js" asp-append-version="true"></script>
+  <script src="~/js/js.js" asp-append-version="true"></script>
 </body>
 </html>
