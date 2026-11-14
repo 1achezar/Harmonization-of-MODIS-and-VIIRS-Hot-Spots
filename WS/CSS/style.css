@@ -1,0 +1,48 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #060b19;
+  color: #f1f5f9;
+  overflow-x: hidden;
+  margin: 0;
+}
+
+
+#hero-globe-canvas {
+  cursor: grab;
+  touch-action: none;
+  display: block;
+}
+
+#hero-globe-canvas:active {
+  cursor: grabbing;
+}
+
+.hero-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 320px;
+}
+
+.globe-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.balkan-globe {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 40px rgba(0, 229, 255, 0.12));
+}
+

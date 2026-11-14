@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NasaSpaceAppsChallenge</title>
+
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind Custom Configuration -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            space: {
+              950: '#060b19',
+              900: '#0b1224',
+              800: '#111a33',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <link rel="stylesheet" href="../CSS/style.css" />
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+
+ <!-- NAV -->
+  <header class="sticky top-0 z-50 bg-space-950/85 backdrop-blur-md border-b border-slate-800/80">
+    <div class="w-full px-6 sm:px-10 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Brand Title & Subtitle -->
+      <a href="#top" class="flex items-center gap-3 group">
+        <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:border-cyan-400 transition">
+          <i data-lucide="satellite" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="font-bold text-sm sm:text-base tracking-tight text-white leading-none">
+            NasaSpaceAppsChallenge
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono mt-1">
+            MODIS+VIIRS Harmonized Burning Activity
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </header>
+
+
+
+
+
+
+
+
+
+  <!-- HERO -->
+  <section id="top" class="relative overflow-hidden border-b border-slate-800/80 flex-1 flex items-center">
+    <!-- Glow -->
+    <div class="pointer-events-none absolute bottom-0 left-10 w-[400px] h-[400px] rounded-full bg-orange-500/5 blur-3xl"></div>
+
+
+
+    <div class="max-w-7xl mx-auto px-6 py-12 lg:py-20 w-full grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-6 items-center">
+      
+      <!-- Left Col -->
+      <div class="lg:col-span-6 space-y-6 z-10">
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.08]">
+          Wildfires on the <span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-red-500">Balkans</span>
+        </h1>
+
+        <p class="text-base sm:text-lg text-slate-400 max-w-xl leading-relaxed">
+          Sync the historical knowledge of MODIS with the high-resolution VIIRS detection into a single <span class="text-slate-200 font-medium">FireActivityCalendar</span>.
+        </p>
+
+
+
+
+        <div class="flex flex-wrap items-center gap-4 pt-2">
+          <a href="/WS/HTML/globe.html" class="px-6 py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-cyan-500/25 flex items-center gap-2">
+            <span>Open the globe</span>
+            <i data-lucide="globe" class="w-4 h-4"></i>
+          </a>
+        </div>
+
+        
+
+
+
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 pt-6 border-t border-slate-800/80 max-w-lg">
+          <div class="p-3.5 rounded-xl bg-space-900/70 border border-slate-800/90">
+            <div class="text-base sm:text-lg font-bold font-mono text-white">2000 – 2026</div>
+          </div>
+          
+          <div class="p-3.5 rounded-xl bg-space-900/70 border border-slate-800/90">
+            <div class="text-base sm:text-lg font-bold font-mono text-orange-400">MODIS+VIIRS</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div class="lg:col-span-6 flex items-center justify-center z-10">
+        <a href="/WS/HTML/globe.html" aria-label="Open interactive 3D globe" class="globe-wrapper group">
+          <svg class="balkan-globe" viewBox="0 0 420 420" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <clipPath id="globeClip">
+                <circle cx="210" cy="210" r="175" />
+              </clipPath>
+            </defs>
+
+            
+
+            <!-- Globe_home -->
+            <circle
+              cx="210"
+              cy="210"
+              r="175"
+              fill="url(#sphereGlow)"
+              stroke="#00E5FF"
+              stroke-opacity="0.38"
+              stroke-width="1.5"
+              class="transition-all duration-500 group-hover:stroke-opacity-75"
+            />
+
+            
+            <g clip-path="url(#globeClip)">
+              <!-- Conts -->
+              <g stroke="#00E5FF" stroke-opacity="0.13" stroke-width="1" fill="none">
+                <ellipse cx="210" cy="95" rx="134" ry="22" />
+                <ellipse cx="210" cy="150" rx="164" ry="30" />
+                <ellipse cx="210" cy="210" rx="175" ry="36" stroke-opacity="0.22" />
+                <ellipse cx="210" cy="270" rx="164" ry="30" />
+                <ellipse cx="210" cy="325" rx="134" ry="22" />
+
+                <ellipse cx="210" cy="210" rx="42" ry="175" />
+                <ellipse cx="210" cy="210" rx="95" ry="175" />
+                <ellipse cx="210" cy="210" rx="142" ry="175" />
+                <line x1="210" y1="35" x2="210" y2="385" stroke-opacity="0.2" />
+              </g>
+
+              
+              <g fill="#00E5FF" fill-opacity="0.05" stroke="#00E5FF" stroke-opacity="0.26" stroke-width="1.1" stroke-linejoin="round">
+                <!-- Western & Northern Europe + Scandinavia -->
+                <path d="M155,112 L166,95 L182,82 L198,86 L194,104 L180,115 L186,126 L172,135 L154,142 L144,132 Z" />
+                <!-- Iberian & Italian Peninsulas -->
+                <path d="M142,143 L156,143 L154,156 L140,155 Z" />
+                <path d="M174,136 L183,138 L190,154 L184,158 L176,144 Z" />
+                <!-- Eurasia / Eastern Europe & Asia -->
+                <path d="M202,96 L248,88 L312,98 L358,124 L366,162 L338,188 L302,184 L282,202 L262,182 L242,164 L218,142 L202,126 Z" />
+                <!-- Africa -->
+                <path d="M144,166 L186,166 L216,184 L232,218 L222,262 L202,298 L184,294 L176,248 L152,226 L136,196 Z" />
+                <!-- Americas (Western Limb) -->
+                <path d="M46,118 L78,108 L92,136 L76,168 L88,196 L112,224 L98,274 L76,294 L66,244 L52,188 Z" />
+                <path d="M192,136 L214,135 L224,146 L216,158 L207,168 L199,163 L194,148 Z" />
+              </g>
+
+              
+          </svg>
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <script src="/WS/JS/js.js"></script>
+</body>
+</html>

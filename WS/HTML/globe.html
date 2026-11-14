@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NasaSpaceAppsChallenge</title>
+
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Globe.gl (Three.js 3D Satellite Globe) -->
+  <script src="https://unpkg.com/globe.gl"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            space: {
+              950: '#060b19',
+              900: '#0b1224',
+              800: '#111a33',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #060b19;
+    }
+    #globe-container canvas {
+      outline: none;
+    }
+  </style>
+</head>
+<body class="text-slate-100 antialiased selection:bg-cyan-500/30">
+
+  <!-- Globe -->
+  <div id="globe-container" class="fixed inset-0 z-0"></div>
+
+  
+
+  <!-- Left panel -->
+  <aside class="fixed top-6 left-4 sm:left-6 z-20 w-80 max-w-[calc(100vw-2rem)] bg-space-950/85 backdrop-blur-xl border border-slate-800/90 rounded-2xl p-5 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between">
+      <span class="text-xs font-mono uppercase tracking-wider text-cyan-400">Wildfires</span>
+      
+    </div>
+
+    
+
+    
+    <div class="space-y-3 pt-1 border-t border-slate-800/80">
+      
+
+      <div class="grid grid-cols-2 gap-2.5">
+        <div>
+          <label class="block text-[11px] font-mono text-slate-400 mb-1">Sensor Source</label>
+          <select id="fire-sensor-select" class="w-full px-2.5 py-2 rounded-lg bg-space-900 border border-slate-700/80 text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+            <option value="VIIRS (375m)">VIIRS</option>
+            <option value="MODIS (1km)">MODIS</option>
+            <option value="Harmonized">Harmonized</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-mono text-slate-400 mb-1">Date (2000–2026)</label>
+          <input id="fire-date-input" type="date" value="2026-08-14" min="2000-01-01" max="2026-12-31" class="w-full px-2.5 py-2 rounded-lg bg-space-900 border border-slate-700/80 text-xs font-mono text-white focus:outline-none focus:border-cyan-400" />
+        </div>
+      </div>
+
+      
+    </div>
+
+    
+
+    
+  </aside>
+
+  
+
+  <script src="/WS/JS/globe.js"></script>
+</body>
+</html>
