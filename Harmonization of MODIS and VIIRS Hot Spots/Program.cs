@@ -39,10 +39,7 @@ using (var scope = app.Services.CreateScope())
     DataSeeder.SeedCsvData(context, currPath);
 }
 
-app.MapControllerRoute(
-    name: "globe",
-    pattern: "globe",
-    defaults: new { controller = "Home", action = "Globe" });
+app.MapControllers();   // attribute-routed API controllers (api/fires)
 
 app.MapControllerRoute(
     name: "default",
