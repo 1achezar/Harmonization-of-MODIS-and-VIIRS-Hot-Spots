@@ -22,6 +22,13 @@ function populateSelects() {
   const mFrom = document.getElementById('sel-month-from');
   const mTo   = document.getElementById('sel-month-to');
 
+  if (!yFrom || !yTo || !mFrom || !mTo) return;
+
+  yFrom.innerHTML = '';
+  yTo.innerHTML = '';
+  mFrom.innerHTML = '';
+  mTo.innerHTML = '';
+
   for (let y = 2000; y <= 2026; y++) {
     yFrom.add(new Option(y, y, y === 2020, y === 2020));
     yTo.add(new Option(y, y, y === 2026, y === 2026));
@@ -30,27 +37,6 @@ function populateSelects() {
     mFrom.add(new Option(m, i + 1, i === 0, i === 0));
     mTo.add(new Option(m, i + 1, i === 11, i === 11));
   });
-}
-
-// ── Extract rings for seamless path lines ───────────────────────────────────
-function extractBoundaryPaths(feature) {
-  if (!feature || !feature.geometry) return [];
-  const geom = feature.geometry;
-  const paths = [];
-
-  if (geom.type === 'Polygon') {
-    geom.coordinates.forEach(ring => {
-      // Globe.gl path expects array of [lat, lng]
-      paths.push(ring.map(([lng, lat]) => [lat, lng]));
-    });
-  } else if (geom.type === 'MultiPolygon') {
-    geom.coordinates.forEach(poly => {
-      poly.forEach(ring => {
-        paths.push(ring.map(([lng, lat]) => [lat, lng]));
-      });
-    });
-  }
-  return paths;
 }
 
 // ── Globe initialization & Event Handlers ────────────────────────────────────
@@ -78,33 +64,25 @@ document.addEventListener('DOMContentLoaded', () => {
     .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
     .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
 
-    // ── Natural Earth Atmospheric Glow (soft realistic sky-blue, NOT red) ──
+    // ── Natural Earth Atmosphere (soft realistic blue, NO red halo) ──
     .atmosphereColor('#38bdf8')
     .atmosphereAltitude(0.12)
 
-    // ── Selected Country Translucent Fill (polygons layer) ──
+    // ── Selected Country Outline & Subtle Tint (Polygons layer) ──
     .polygonsData([])
-    .polygonGeoJsonGeometry(d => d.geometry)
-    .polygonCapColor(() => 'rgba(56, 189, 248, 0.07)')
+    .polygonCapColor(() => 'rgba(56, 189, 248, 0.08)')
     .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
-    .polygonStrokeColor(() => 'rgba(0, 0, 0, 0)')
-    .polygonAltitude(0.005)
+    .polygonStrokeColor(() => '#38bdf8')
+    .polygonAltitude(0.006)
 
-    // ── Selected Country Seamless Border Line (paths layer) ──
-    .pathsData([])
-    .pathPoints(d => d)
-    .pathColor(() => '#38bdf8')
-    .pathStroke(2.0)
-    .pathAltitude(0.008)
-
-    // ── Wildfire Thermal Points Layer (red dots) ──
+    // ── Wildfire Thermal Points Layer (Red dots) ──
     .pointsData([])
     .pointLat('lat')
     .pointLng('lng')
     .pointColor('color')
     .pointAltitude('alt')
     .pointRadius('radius')
-    .pointResolution(14)
+    .pointResolution(16)
     .pointLabel(d => `
       <div style="
         background: rgba(6, 11, 25, 0.96);
@@ -142,36 +120,42 @@ document.addEventListener('DOMContentLoaded', () => {
     world.height(window.innerHeight);
   });
 
-  // ── Load Balkan GeoJSON boundaries ─────────────────────────────────────────
+  // ── Load Balkan GeoJSON boundaries safely ───────────────────────────────────
   fetch('/data/balkans.geojson')
-    .then(res => res.json())
+    .then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
     .then(data => {
       balkanGeoJson = data;
+      // If a country is already selected, highlight it immediately
+      if (selCountry && selCountry.value) {
+        highlightCountry(selCountry.value);
+      }
     })
     .catch(err => {
-      console.warn('Failed to load balkans.geojson:', err);
+      console.warn('balkans.geojson fetch notice:', err);
     });
 
-  // ── Helper: Focus on country & outline it ──────────────────────────────────
-  function selectAndHighlightCountry(country, duration = 1200) {
-    if (!country) return;
-
-    // 1. Zoom into a dramatic close-up view of the country
-    if (COUNTRY_POV[country]) {
-      world.pointOfView(COUNTRY_POV[country], duration);
-    }
-
-    // 2. Outline country with a seamless border and translucent cap
-    if (balkanGeoJson && balkanGeoJson.features) {
-      const feature = balkanGeoJson.features.find(f => f.properties.key === country);
+  // ── Helper: Outline Country on Globe ───────────────────────────────────────
+  function highlightCountry(country) {
+    if (!balkanGeoJson || !balkanGeoJson.features) return;
+    try {
+      const feature = balkanGeoJson.features.find(f => f.properties && f.properties.key === country);
       if (feature) {
         world.polygonsData([feature]);
-        const paths = extractBoundaryPaths(feature);
-        world.pathsData(paths);
       } else {
         world.polygonsData([]);
-        world.pathsData([]);
       }
+    } catch (e) {
+      console.warn('highlightCountry error:', e);
+    }
+  }
+
+  // ── Helper: Focus on country with smooth zoom ──────────────────────────────
+  function zoomToCountry(country, duration = 1200) {
+    if (COUNTRY_POV[country]) {
+      world.pointOfView(COUNTRY_POV[country], duration);
     }
   }
 
@@ -179,25 +163,27 @@ document.addEventListener('DOMContentLoaded', () => {
   selCountry.addEventListener('change', () => {
     const country = selCountry.value;
     if (country) {
-      // Clear previous fire points and status
       world.pointsData([]);
       statusBox.classList.add('hidden');
       legend.classList.add('hidden');
 
-      selectAndHighlightCountry(country, 1300);
+      zoomToCountry(country, 1200);
+      highlightCountry(country);
     }
   });
 
   // ── Show Fires Button Click ───────────────────────────────────────────────
-  btnExplore.addEventListener('click', async () => {
+  btnExplore.addEventListener('click', async (e) => {
+    e.preventDefault();
+
     const country   = selCountry.value;
-    const yearFrom  = parseInt(document.getElementById('sel-year-from').value);
-    const monthFrom = parseInt(document.getElementById('sel-month-from').value);
-    const yearTo    = parseInt(document.getElementById('sel-year-to').value);
-    const monthTo   = parseInt(document.getElementById('sel-month-to').value);
+    const yearFrom  = parseInt(document.getElementById('sel-year-from').value, 10);
+    const monthFrom = parseInt(document.getElementById('sel-month-from').value, 10);
+    const yearTo    = parseInt(document.getElementById('sel-year-to').value, 10);
+    const monthTo   = parseInt(document.getElementById('sel-month-to').value, 10);
 
     if (!country) {
-      showError('Please select a country.');
+      showError('Please select a country from the dropdown.');
       return;
     }
     if (yearFrom > yearTo || (yearFrom === yearTo && monthFrom > monthTo)) {
@@ -205,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Show loading state
+    // UI loading state
     statusBox.classList.remove('hidden');
     statusLoading.classList.remove('hidden');
     statusLoading.style.display = 'flex';
@@ -214,8 +200,9 @@ document.addEventListener('DOMContentLoaded', () => {
     legend.classList.add('hidden');
     btnExplore.disabled = true;
 
-    // Ensure country is highlighted & zoomed
-    selectAndHighlightCountry(country, 1000);
+    // Zoom and highlight country
+    zoomToCountry(country, 1000);
+    highlightCountry(country);
 
     try {
       const url = `/api/fires?country=${encodeURIComponent(country)}`
@@ -225,20 +212,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
+        throw new Error(err.error || `HTTP error ${res.status}`);
       }
 
       const fires = await res.json();
 
-      if (fires.length === 0) {
+      if (!fires || fires.length === 0) {
         statusLoading.style.display = 'none';
         world.pointsData([]);
         showStatus(`No fire detections found for ${country} in this period.`);
         return;
       }
 
-      // Map fire data to red 3D thermal dots
-      const maxFrp = Math.max(...fires.map(f => f.frp));
+      // Map fire records to 3D red thermal dots
+      const maxFrp = Math.max(...fires.map(f => f.frp || 1));
       const points = fires.map(f => ({
         lat:    f.lat,
         lng:    f.lng,
@@ -247,12 +234,12 @@ document.addEventListener('DOMContentLoaded', () => {
         month:  f.month,
         color:  frpColor(f.frp),
         alt:    Math.max(0.010, Math.min(0.06, f.frp / (maxFrp * 3))),
-        radius: Math.max(0.12, Math.min(0.42, f.frp / (maxFrp * 1.6))),
+        radius: Math.max(0.12, Math.min(0.40, f.frp / (maxFrp * 1.6))),
       }));
 
       world.pointsData(points);
 
-      // Show results
+      // Results summary
       statusLoading.style.display = 'none';
       const truncated = fires.length >= 5000 ? ' (showing top 5,000 by intensity)' : '';
       showStatus(`${fires.length.toLocaleString()} fire events found in ${country} · ${MONTHS[monthFrom-1]} ${yearFrom} – ${MONTHS[monthTo-1]} ${yearTo}${truncated}`);
@@ -268,9 +255,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function frpColor(frp) {
-    if (frp >= 150) return '#ef4444';   // Intense bright red
-    if (frp >= 50)  return '#f87171';   // Medium vibrant red
-    return '#fca5a5';                   // Soft warm red
+    if (frp >= 150) return '#ef4444';   // High FRP (intense red)
+    if (frp >= 50)  return '#f87171';   // Medium FRP (medium red)
+    return '#fca5a5';                   // Low FRP (soft red)
   }
 
   function showStatus(msg) {

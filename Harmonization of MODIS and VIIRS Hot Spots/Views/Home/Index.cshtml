@@ -137,10 +137,10 @@
       </div>
 
       <!-- Explore button -->
-      <button id="btn-explore"
+      <button id="btn-explore" type="button"
               class="w-full py-3 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed
                      text-white font-bold text-sm transition shadow-lg shadow-red-500/20
-                     flex items-center justify-center gap-2">
+                     flex items-center justify-center gap-2 cursor-pointer">
         <i data-lucide="search" class="w-4 h-4"></i>
         Show Fires
       </button>
@@ -154,7 +154,7 @@
         <div id="status-result" class="hidden">
           <div class="text-xs font-mono text-slate-400" id="result-summary"></div>
         </div>
-        <div id="status-error" class="hidden text-xs text-red-400 font-mono" id="error-msg"></div>
+        <div id="status-error" class="hidden text-xs text-red-400 font-mono"></div>
       </div>
 
       <!-- Legend (shown after results) -->
