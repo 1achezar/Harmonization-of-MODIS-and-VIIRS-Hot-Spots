@@ -47,6 +47,7 @@ public static class DataSeeder
     public static void SeedCsvData(AppDbContext context, string filePath)
     {
         if (context.FireEvents.Any()) return;
+        if (!File.Exists(filePath)) return;
 
         var options = new CsvReaderOptions
         {

@@ -1,0 +1,9 @@
+**/.git
+**/.vs
+**/bin
+**/obj
+**/.vscode
+publish-test/
+temp/
+*.user
+appsettings.Development.json
