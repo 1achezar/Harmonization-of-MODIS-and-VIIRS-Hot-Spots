@@ -1,6 +1,8 @@
 # Balkan Wildfire Calendar
 ### Harmonization of NASA MODIS and VIIRS Thermal Hot Spots (2000–2026)
 
+**Live Web Application**: [https://harmonization-of-modis-and-viirs-hot-spots-production.up.railway.app](https://harmonization-of-modis-and-viirs-hot-spots-production.up.railway.app)
+
 The **Balkan Wildfire Calendar** is an interactive 3D geospatial analytics platform designed to visualize, filter, and analyze 26 years of wildfire activity across Southeastern Europe. 
 
 By harmonizing nearly 1,000,000 thermal anomaly records from two distinct NASA satellite instruments (MODIS and VIIRS), the platform resolves sensor discrepancies and enables researchers and emergency planners to draw, edit, and query custom geographic boundaries anywhere across the Balkans in real time.
