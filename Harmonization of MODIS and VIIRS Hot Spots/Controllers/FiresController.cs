@@ -29,32 +29,58 @@ namespace Harmonization_of_MODIS_and_VIIRS_Hot_Spots.Controllers
 
         [HttpGet]
         public async Task<IActionResult> Get(
-            [FromQuery] string country,
+            [FromQuery] string? country,
+            [FromQuery] double? latMin,
+            [FromQuery] double? latMax,
+            [FromQuery] double? lngMin,
+            [FromQuery] double? lngMax,
             [FromQuery] int yearFrom,
             [FromQuery] int monthFrom,
             [FromQuery] int yearTo,
             [FromQuery] int monthTo)
         {
-            if (!Bounds.TryGetValue(country, out var b))
-                return BadRequest(new { error = $"Unknown country: {country}" });
-
             if (yearFrom > yearTo || (yearFrom == yearTo && monthFrom > monthTo))
                 return BadRequest(new { error = "Invalid date range." });
 
+            double minLat, maxLat, minLng, maxLng;
+
+            if (latMin.HasValue && latMax.HasValue && lngMin.HasValue && lngMax.HasValue)
+            {
+                minLat = Math.Min(latMin.Value, latMax.Value);
+                maxLat = Math.Max(latMin.Value, latMax.Value);
+                minLng = Math.Min(lngMin.Value, lngMax.Value);
+                maxLng = Math.Max(lngMin.Value, lngMax.Value);
+            }
+            else if (!string.IsNullOrEmpty(country) && Bounds.TryGetValue(country, out var b))
+            {
+                minLat = b.LatMin;
+                maxLat = b.LatMax;
+                minLng = b.LngMin;
+                maxLng = b.LngMax;
+            }
+            else
+            {
+                // Fallback to broader Balkan bounding box
+                minLat = 34.5;
+                maxLat = 48.5;
+                minLng = 13.0;
+                maxLng = 30.0;
+            }
+
             var fires = await _db.FireEvents
                 .Where(f =>
-                    f.Latitude  >= b.LatMin && f.Latitude  <= b.LatMax &&
-                    f.Longitude >= b.LngMin && f.Longitude <= b.LngMax &&
+                    f.Latitude  >= minLat && f.Latitude  <= maxLat &&
+                    f.Longitude >= minLng && f.Longitude <= maxLng &&
                     (f.Year > yearFrom || (f.Year == yearFrom && f.Month >= monthFrom)) &&
                     (f.Year < yearTo   || (f.Year == yearTo   && f.Month <= monthTo)))
                 .OrderByDescending(f => f.TotalFrp)
                 .Take(5000)
                 .Select(f => new
                 {
-                    lat  = f.Latitude,
-                    lng  = f.Longitude,
-                    frp  = f.TotalFrp,
-                    year = f.Year,
+                    lat   = f.Latitude,
+                    lng   = f.Longitude,
+                    frp   = f.TotalFrp,
+                    year  = f.Year,
                     month = f.Month
                 })
                 .ToListAsync();

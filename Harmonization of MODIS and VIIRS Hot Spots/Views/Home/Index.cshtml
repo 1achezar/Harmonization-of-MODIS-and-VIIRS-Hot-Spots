@@ -6,7 +6,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Balkan Wildfires – MODIS + VIIRS</title>
+  <title>Balkan Wildfires – Custom Area Selection (MODIS + VIIRS)</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/globe.gl"></script>
@@ -21,7 +21,7 @@
       darkMode: 'class',
       theme: { extend: {
         fontFamily: { sans: ['Inter','system-ui','sans-serif'], mono: ['JetBrains Mono','monospace'] },
-        colors: { space: { 950:'#060b19', 900:'#0b1224', 800:'#111a33' } }
+        colors: { space: { 950:'#060b19', 900:'#0b1224', 850:'#0f172a', 800:'#111a33' } }
       }}
     };
   </script>
@@ -53,44 +53,171 @@
     .custom-scroll { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
     .custom-scroll::-webkit-scrollbar { width: 3px; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
+
+    /* Vertex marker drag handle */
+    .vertex-handle {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.9), 0 2px 4px rgba(0,0,0,0.8);
+      cursor: grab;
+      transition: transform 0.15s ease, background 0.15s ease;
+      user-select: none;
+      pointer-events: auto;
+    }
+    .vertex-handle:hover {
+      transform: scale(1.35);
+    }
+    .vertex-handle.vertex-start {
+      background: #10b981;
+      border-color: #ffffff;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.95), 0 2px 4px rgba(0,0,0,0.8);
+    }
+    .vertex-handle:active {
+      cursor: grabbing;
+      transform: scale(1.2);
+    }
   </style>
 </head>
 <body class="font-sans text-slate-100 antialiased selection:bg-red-500/30">
 
-  <!-- GLOBE -->
+  <!-- 3D GLOBE CANVAS -->
   <div id="globe-container" class="fixed inset-0 z-0"></div>
+
+  <!-- FLOATING DRAWING MODE BANNER (Visible while drawing on map) -->
+  <div id="drawing-banner" class="hidden fixed top-5 left-1/2 -translate-x-1/2 z-30
+       bg-space-950/95 backdrop-blur-xl border border-sky-500/50 shadow-2xl shadow-sky-500/20
+       rounded-2xl px-5 py-3 flex items-center gap-4 text-xs select-none">
+    <div class="flex items-center gap-2 text-sky-400 font-semibold shrink-0">
+      <i data-lucide="edit-3" class="w-4 h-4 animate-pulse"></i>
+      <span>Drawing Mode Active</span>
+    </div>
+    <div class="text-slate-300 hidden md:block text-[11px]">
+      Click map to place points · Click 1st point (green) or Finish to close · Drag points to adjust
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <button id="banner-btn-finish" type="button" disabled
+              class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed
+                     text-white font-bold transition flex items-center gap-1.5 cursor-pointer">
+        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+        <span>Finish (<span id="banner-point-count">0</span>)</span>
+      </button>
+      <button id="banner-btn-undo" type="button" title="Undo last point"
+              class="px-2.5 py-1.5 rounded-lg bg-space-850 hover:bg-space-800 text-slate-300 border border-slate-700 transition cursor-pointer">
+        <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+      </button>
+      <button id="banner-btn-cancel" type="button" title="Cancel drawing"
+              class="px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition cursor-pointer">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+  </div>
 
   <!-- BRAND watermark top-right -->
   <div class="fixed top-4 right-5 z-20 text-right select-none pointer-events-none">
     <div class="text-xs font-bold text-white/60 tracking-tight">NasaSpaceAppsChallenge</div>
-    <div class="text-[10px] font-mono text-white/30 mt-0.5">MODIS + VIIRS · 2000–2026</div>
+    <div class="text-[10px] font-mono text-white/30 mt-0.5">MODIS + VIIRS · Balkan Harmonization</div>
   </div>
 
   <!-- CONTROL PANEL -->
   <aside id="panel"
-         class="panel fixed top-0 left-0 h-full z-20 w-72 max-w-[88vw]
-                bg-space-950/92 backdrop-blur-2xl border-r border-slate-800/70
+         class="panel fixed top-0 left-0 h-full z-20 w-80 max-w-[90vw]
+                bg-space-950/94 backdrop-blur-2xl border-r border-slate-800/70
                 flex flex-col shadow-2xl">
 
     <!-- Header -->
     <div class="px-5 pt-5 pb-4 border-b border-slate-800/70 shrink-0">
       <div class="flex items-center gap-2.5">
-        <div class="w-7 h-7 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+        <div class="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center">
           <i data-lucide="flame" class="w-4 h-4 text-red-400"></i>
         </div>
         <div>
           <div class="text-sm font-bold text-white leading-none">Balkan Wildfire Explorer</div>
-          <div class="text-[10px] font-mono text-slate-500 mt-0.5">Harmonized MODIS + VIIRS</div>
+          <div class="text-[10px] font-mono text-slate-500 mt-1">Interactive Custom Area Selection</div>
         </div>
       </div>
     </div>
 
-    <!-- Form -->
-    <div class="flex-1 px-4 py-5 space-y-4 overflow-y-auto custom-scroll">
+    <!-- Form Content -->
+    <div class="flex-1 px-4 py-4 space-y-4 overflow-y-auto custom-scroll">
 
-      <!-- Country -->
+      <!-- Selection Mode Tabs: Custom Polygon vs Country Preset -->
       <div class="space-y-1.5">
-        <label for="sel-country" class="block text-[11px] font-mono uppercase tracking-widest text-slate-500">Country</label>
+        <label class="block text-[11px] font-mono uppercase tracking-widest text-slate-500">Area Selection Mode</label>
+        <div class="grid grid-cols-2 gap-1 bg-space-900 p-1 rounded-xl border border-slate-800">
+          <button id="tab-custom" type="button"
+                  class="py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 bg-sky-500/20 text-sky-300 border border-sky-500/40">
+            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+            <span>Draw Area</span>
+          </button>
+          <button id="tab-country" type="button"
+                  class="py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+            <span>Country</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- SECTION A: Custom Area Drawing Tool (Primary) -->
+      <div id="section-custom-draw" class="space-y-2.5 p-3 rounded-xl bg-space-900/80 border border-sky-500/30 shadow-inner">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-sky-300 flex items-center gap-1.5">
+            <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i>
+            <span>Custom Geographic Area</span>
+          </span>
+          <span id="badge-point-count" class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-sky-950 text-sky-400 border border-sky-800/80">
+            0 points
+          </span>
+        </div>
+
+        <!-- Draw Mode Activator Button -->
+        <button id="btn-draw-mode" type="button"
+                class="w-full py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-500 hover:to-cyan-500
+                       text-white font-bold text-xs transition shadow-lg shadow-sky-600/20
+                       flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]">
+          <i data-lucide="edit-3" class="w-4 h-4"></i>
+          <span id="btn-draw-mode-text">Start Drawing on Map</span>
+        </button>
+
+        <!-- Sub-actions: Finish / Undo / Clear -->
+        <div class="grid grid-cols-3 gap-1.5 pt-0.5">
+          <button id="btn-finish-draw" type="button" disabled
+                  class="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-35 disabled:cursor-not-allowed
+                         text-white text-[11px] font-bold transition flex items-center justify-center gap-1 cursor-pointer">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+            <span>Finish</span>
+          </button>
+          <button id="btn-undo-draw" type="button" disabled
+                  class="py-1.5 px-2 rounded-lg bg-space-800 hover:bg-space-700 disabled:opacity-35 disabled:cursor-not-allowed
+                         text-slate-200 border border-slate-700 text-[11px] font-mono transition flex items-center justify-center gap-1 cursor-pointer">
+            <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+            <span>Undo</span>
+          </button>
+          <button id="btn-clear-draw" type="button" disabled
+                  class="py-1.5 px-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 disabled:opacity-35 disabled:cursor-not-allowed
+                         text-rose-300 border border-rose-500/30 text-[11px] font-mono transition flex items-center justify-center gap-1 cursor-pointer">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>Clear</span>
+          </button>
+        </div>
+
+        <!-- Drawing Instructions Hint -->
+        <div id="draw-hint" class="text-[11px] text-slate-400 bg-space-950/60 p-2.5 rounded-lg border border-slate-800/80 leading-relaxed font-mono">
+          <div class="text-sky-400 font-semibold mb-1 flex items-center gap-1">
+            <i data-lucide="info" class="w-3.5 h-3.5"></i> Instructions:
+          </div>
+          • Click on the map to add polygon vertices.<br/>
+          • Minimum 3 points required.<br/>
+          • Drag points to fine-tune boundaries.<br/>
+          • Click first point (green) or "Finish" to complete.
+        </div>
+      </div>
+
+      <!-- SECTION B: Predefined Country Selection (Optional alternative) -->
+      <div id="section-country" class="hidden space-y-1.5">
+        <label for="sel-country" class="block text-[11px] font-mono uppercase tracking-widest text-slate-500">Country Preset</label>
         <select id="sel-country"
                 class="w-full px-3 py-2.5 rounded-xl bg-space-800 border border-slate-700/70
                        text-sm text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
@@ -109,7 +236,7 @@
         </select>
       </div>
 
-      <!-- Period -->
+      <!-- Date Period -->
       <div class="space-y-1.5">
         <label class="block text-[11px] font-mono uppercase tracking-widest text-slate-500">Time Period</label>
         <div class="grid grid-cols-2 gap-2">
@@ -117,11 +244,11 @@
           <div class="space-y-1">
             <span class="text-[10px] font-mono text-slate-600">From</span>
             <select id="sel-year-from"
-                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                    class="w-full px-2 py-2 rounded-lg bg-space-800 border border-slate-700/70
                            text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
             </select>
             <select id="sel-month-from"
-                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                    class="w-full px-2 py-2 rounded-lg bg-space-800 border border-slate-700/70
                            text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
             </select>
           </div>
@@ -129,11 +256,11 @@
           <div class="space-y-1">
             <span class="text-[10px] font-mono text-slate-600">To</span>
             <select id="sel-year-to"
-                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                    class="w-full px-2 py-2 rounded-lg bg-space-800 border border-slate-700/70
                            text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
             </select>
             <select id="sel-month-to"
-                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                    class="w-full px-2 py-2 rounded-lg bg-space-800 border border-slate-700/70
                            text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
             </select>
           </div>
@@ -162,7 +289,7 @@
                        text-white font-bold text-sm transition shadow-lg shadow-red-500/20
                        flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]">
           <i data-lucide="search" class="w-4 h-4"></i>
-          <span>Show Fires</span>
+          <span>Show Fires in Selected Area</span>
         </button>
 
         <button id="btn-clear" type="button"
@@ -177,10 +304,10 @@
       <div id="status-box" class="hidden rounded-xl border border-slate-800/80 bg-space-800/50 p-3.5 space-y-2">
         <div id="status-loading" class="hidden items-center gap-2 text-xs text-slate-400">
           <div class="spinner shrink-0"></div>
-          <span>Querying database…</span>
+          <span>Querying Supabase database…</span>
         </div>
         <div id="status-result" class="hidden">
-          <div class="text-xs font-mono text-slate-400 leading-relaxed" id="result-summary"></div>
+          <div class="text-xs font-mono text-slate-300 leading-relaxed" id="result-summary"></div>
         </div>
         <div id="status-error" class="hidden text-xs text-red-400 font-mono"></div>
       </div>

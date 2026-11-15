@@ -98,7 +98,21 @@ function populateSelects() {
   });
 }
 
-// ── Strict Point-In-Polygon (PIP) for Country Boundaries ─────────────────────
+// ── Strict Point-In-Polygon (PIP) for Custom Polygon ─────────────────────────
+function isPointInCustomPolygon(lng, lat, points) {
+  if (!points || points.length < 3) return true;
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const xi = points[i].lng, yi = points[i].lat;
+    const xj = points[j].lng, yj = points[j].lat;
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+                      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// ── Strict Point-In-Polygon for GeoJSON MultiPolygon (Country Presets) ────────
 function pointInRing(x, y, ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -117,7 +131,7 @@ function isPointInGeometry(lng, lat, geom) {
     const rings = geom.coordinates;
     if (!pointInRing(lng, lat, rings[0])) return false;
     for (let i = 1; i < rings.length; i++) {
-      if (pointInRing(lng, lat, rings[i])) return false; // In an inner hole
+      if (pointInRing(lng, lat, rings[i])) return false;
     }
     return true;
   } else if (geom.type === 'MultiPolygon') {
@@ -135,27 +149,48 @@ function isPointInGeometry(lng, lat, geom) {
   return true;
 }
 
-// ── Globe initialization & Event Handlers ────────────────────────────────────
+// ── Main Initialization ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 
   populateSelects();
   updateLegendUI();
 
-  const container    = document.getElementById('globe-container');
-  const selCountry   = document.getElementById('sel-country');
-  const selPalette   = document.getElementById('sel-palette');
-  const btnExplore   = document.getElementById('btn-explore');
-  const btnClear     = document.getElementById('btn-clear');
-  const statusBox    = document.getElementById('status-box');
-  const statusLoading= document.getElementById('status-loading');
-  const statusResult = document.getElementById('status-result');
-  const statusError  = document.getElementById('status-error');
-  const resultSummary= document.getElementById('result-summary');
-  const legendHex    = document.getElementById('legend-hex');
+  const container        = document.getElementById('globe-container');
+  const selCountry       = document.getElementById('sel-country');
+  const selPalette       = document.getElementById('sel-palette');
+  const btnExplore       = document.getElementById('btn-explore');
+  const btnClear         = document.getElementById('btn-clear');
+  const statusBox        = document.getElementById('status-box');
+  const statusLoading    = document.getElementById('status-loading');
+  const statusResult     = document.getElementById('status-result');
+  const statusError      = document.getElementById('status-error');
+  const resultSummary    = document.getElementById('result-summary');
+  const legendHex        = document.getElementById('legend-hex');
 
-  let balkanGeoJson = null;
-  let activeFires   = [];
+  // Drawing UI elements
+  const tabCustom        = document.getElementById('tab-custom');
+  const tabCountry       = document.getElementById('tab-country');
+  const sectionCustomDraw= document.getElementById('section-custom-draw');
+  const sectionCountry   = document.getElementById('section-country');
+  const btnDrawMode      = document.getElementById('btn-draw-mode');
+  const btnDrawModeText  = document.getElementById('btn-draw-mode-text');
+  const btnFinishDraw    = document.getElementById('btn-finish-draw');
+  const btnUndoDraw      = document.getElementById('btn-undo-draw');
+  const btnClearDraw     = document.getElementById('btn-clear-draw');
+  const badgePointCount  = document.getElementById('badge-point-count');
+  const drawingBanner    = document.getElementById('drawing-banner');
+  const bannerPointCount = document.getElementById('banner-point-count');
+  const bannerBtnFinish  = document.getElementById('banner-btn-finish');
+  const bannerBtnUndo    = document.getElementById('banner-btn-undo');
+  const bannerBtnCancel  = document.getElementById('banner-btn-cancel');
+
+  let balkanGeoJson      = null;
+  let activeMode         = 'custom'; // 'custom' | 'country'
+  let isDrawing          = false;
+  let polygonPoints      = [];       // Array of { lat, lng }
+  let isPolygonFinished  = false;
+  let draggedVertexIndex = null;
 
   // ── Init Globe.gl ──────────────────────────────────────────────────────────
   const world = Globe()(container)
@@ -164,16 +199,32 @@ document.addEventListener('DOMContentLoaded', () => {
     .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
     .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
 
-    // Natural Earth Atmosphere (no red outline)
+    // Atmosphere
     .atmosphereColor('#38bdf8')
     .atmosphereAltitude(0.12)
 
-    // Seamless Country Border (Surface-Flush)
+    // Polygons layer: Semi-transparent fill + boundary stroke
     .polygonsData([])
-    .polygonCapColor(() => 'rgba(56, 189, 248, 0.08)')
+    .polygonCapColor(() => 'rgba(56, 189, 248, 0.22)')
     .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
     .polygonStrokeColor(() => '#38bdf8')
-    .polygonAltitude(0.00015)
+    .polygonAltitude(0.0002)
+
+    // Paths layer: Visible lines connecting points while drawing & boundary outline
+    .pathsData([])
+    .pathPoints(d => d)
+    .pathPointLat(p => p.lat)
+    .pathPointLng(p => p.lng)
+    .pathColor(() => '#38bdf8')
+    .pathStroke(2.8)
+    .pathAltitude(0.00028)
+
+    // HTML Elements layer: Draggable vertex handles at each polygon point
+    .htmlElementsData([])
+    .htmlLat(d => d.lat)
+    .htmlLng(d => d.lng)
+    .htmlAltitude(0.00035)
+    .htmlElement(d => createVertexElement(d))
 
     // 2D Hexagonal Grid: Surface-Flush on Earth
     .hexBinPointsData([])
@@ -182,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .hexBinPointWeight(d => d.frp || 1)
     .hexBinResolution(6.4)
     .hexMargin(0.04)
-    .hexTopCurvatureResolution(8)                      // Conforms smoothly to sphere
+    .hexTopCurvatureResolution(8)                      // Smoothly curves over sphere
     .hexTopColor(d => getHexColor(d.points.length))    // Dynamic color ramp
     .hexSideColor(() => 'rgba(0, 0, 0, 0)')             // 0 sides = pure flat 2D skin
     .hexAltitude(0.0002)                               // Exact same level as earth surface
@@ -224,7 +275,291 @@ document.addEventListener('DOMContentLoaded', () => {
     world.height(window.innerHeight);
   });
 
-  // ── Load Balkan GeoJSON boundaries ─────────────────────────────────────────
+  // ── Screen coordinate to Geographic Lat/Lng converter ──────────────────────
+  function screenToLatLong(clientX, clientY) {
+    const rect = container.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    if (typeof world.toGlobeCoords === 'function') {
+      const c = world.toGlobeCoords(x, y);
+      if (c && !isNaN(c.lat) && !isNaN(c.lng)) return c;
+    }
+
+    // Mathematical Raycaster Fallback on Earth Sphere of radius 100
+    try {
+      if (typeof THREE !== 'undefined' && world.camera) {
+        const camera = world.camera();
+        const mouse = new THREE.Vector2(
+          (x / rect.width) * 2 - 1,
+          -(y / rect.height) * 2 + 1
+        );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, camera);
+        const sphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 100);
+        const target = new THREE.Vector3();
+        if (raycaster.ray.intersectSphere(sphere, target)) {
+          return world.toGeoCoords(target);
+        }
+      }
+    } catch (e) {
+      console.warn('Raycaster calculation notice:', e);
+    }
+    return null;
+  }
+
+  // ── Create Interactive Vertex DOM Marker ───────────────────────────────────
+  function createVertexElement(d) {
+    const el = document.createElement('div');
+    el.className = 'vertex-handle' + (d.index === 0 ? ' vertex-start' : '');
+    el.dataset.index = d.index;
+    el.title = (d.index === 0 && isDrawing && polygonPoints.length >= 3)
+      ? 'Click to close polygon'
+      : `Point ${d.index + 1} (Drag to move)`;
+
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      // Clicking first vertex while drawing closes the polygon
+      if (isDrawing && d.index === 0 && polygonPoints.length >= 3) {
+        finishSelection();
+        return;
+      }
+
+      // Otherwise start dragging this vertex
+      startDraggingVertex(d.index, e);
+    });
+
+    return el;
+  }
+
+  // ── Vertex Dragging Logic ──────────────────────────────────────────────────
+  function startDraggingVertex(index, e) {
+    draggedVertexIndex = index;
+    controls.enabled = false; // Disable globe orbit while dragging vertex
+
+    function onPointerMove(moveEvent) {
+      if (draggedVertexIndex === null) return;
+      const coords = screenToLatLong(moveEvent.clientX, moveEvent.clientY);
+      if (coords && !isNaN(coords.lat) && !isNaN(coords.lng)) {
+        polygonPoints[draggedVertexIndex].lat = Number(coords.lat.toFixed(4));
+        polygonPoints[draggedVertexIndex].lng = Number(coords.lng.toFixed(4));
+        renderPolygonLayers(false); // fast re-render while dragging
+      }
+    }
+
+    function onPointerUp() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      draggedVertexIndex = null;
+      controls.enabled = true; // Re-enable globe orbit
+
+      renderPolygonLayers(true); // full update
+
+      // If polygon was already completed, re-query/filter fires dynamically!
+      if (isPolygonFinished && polygonPoints.length >= 3) {
+        queryFiresForArea();
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  }
+
+  // ── Render Polygon, Paths, and Vertex Markers ──────────────────────────────
+  function renderPolygonLayers(updateVertices = true) {
+    if (polygonPoints.length === 0) {
+      world.pathsData([]);
+      world.polygonsData([]);
+      if (updateVertices) world.htmlElementsData([]);
+      return;
+    }
+
+    // Paths: connecting lines
+    if (isPolygonFinished && polygonPoints.length >= 3) {
+      // Closed loop line
+      world.pathsData([[...polygonPoints, polygonPoints[0]]]);
+
+      // Semi-transparent GeoJSON polygon fill
+      const feature = {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[...polygonPoints.map(p => [p.lng, p.lat]), [polygonPoints[0].lng, polygonPoints[0].lat]]]
+        }
+      };
+      world.polygonsData([feature]);
+    } else {
+      // Open drawing path
+      world.pathsData([polygonPoints]);
+      world.polygonsData([]);
+    }
+
+    // Vertex handles
+    if (updateVertices) {
+      world.htmlElementsData(polygonPoints.map((p, i) => ({ lat: p.lat, lng: p.lng, index: i })));
+    }
+  }
+
+  // ── Update Drawing UI States & Badges ──────────────────────────────────────
+  function updateDrawUI() {
+    const count = polygonPoints.length;
+    badgePointCount.textContent  = `${count} point${count === 1 ? '' : 's'}`;
+    bannerPointCount.textContent = `${count}`;
+
+    btnFinishDraw.disabled   = count < 3;
+    bannerBtnFinish.disabled = count < 3;
+    btnUndoDraw.disabled     = count === 0;
+    bannerBtnUndo.disabled   = count === 0;
+    btnClearDraw.disabled    = count === 0;
+
+    if (isDrawing) {
+      btnDrawMode.classList.remove('from-sky-600', 'to-cyan-600');
+      btnDrawMode.classList.add('from-amber-600', 'to-orange-600');
+      btnDrawModeText.textContent = 'Drawing Active (Click Map)';
+      drawingBanner.classList.remove('hidden');
+    } else {
+      btnDrawMode.classList.remove('from-amber-600', 'to-orange-600');
+      btnDrawMode.classList.add('from-sky-600', 'to-cyan-600');
+      btnDrawModeText.textContent = isPolygonFinished ? 'Redraw Custom Area' : 'Start Drawing on Map';
+      drawingBanner.classList.add('hidden');
+    }
+  }
+
+  // ── Finish Selection ───────────────────────────────────────────────────────
+  function finishSelection() {
+    if (polygonPoints.length < 3) {
+      showError('Please click at least 3 points on the map to define a closed geographic area.');
+      return;
+    }
+    isDrawing = false;
+    isPolygonFinished = true;
+    renderPolygonLayers(true);
+    updateDrawUI();
+
+    // Dynamically query and filter fires immediately for the selected polygon!
+    queryFiresForArea();
+  }
+
+  // ── Undo Last Point ────────────────────────────────────────────────────────
+  function undoPoint() {
+    if (polygonPoints.length === 0) return;
+    polygonPoints.pop();
+    isPolygonFinished = false;
+    renderPolygonLayers(true);
+    updateDrawUI();
+    if (polygonPoints.length < 3) {
+      world.hexBinPointsData([]);
+    }
+  }
+
+  // ── Clear Custom Area ──────────────────────────────────────────────────────
+  function clearCustomArea() {
+    polygonPoints = [];
+    isPolygonFinished = false;
+    isDrawing = false;
+    renderPolygonLayers(true);
+    world.hexBinPointsData([]);
+    updateDrawUI();
+    statusBox.classList.add('hidden');
+    legendHex.classList.add('hidden');
+  }
+
+  // ── Toggle Drawing Mode ────────────────────────────────────────────────────
+  function toggleDrawMode() {
+    isDrawing = !isDrawing;
+    if (isDrawing) {
+      activeMode = 'custom';
+      // If was previously finished and starting anew:
+      if (isPolygonFinished) {
+        polygonPoints = [];
+        isPolygonFinished = false;
+        renderPolygonLayers(true);
+        world.hexBinPointsData([]);
+      }
+    }
+    updateDrawUI();
+  }
+
+  // ── Globe Click Handler: Add Vertex Points ─────────────────────────────────
+  world.onGlobeClick(({ lat, lng }, event) => {
+    if (!isDrawing || isPolygonFinished) return;
+    if (draggedVertexIndex !== null) return;
+
+    // If clicked near starting point when >= 3 points, close polygon!
+    if (polygonPoints.length >= 3) {
+      const p0 = polygonPoints[0];
+      const dLat = Math.abs(lat - p0.lat);
+      const dLng = Math.abs(lng - p0.lng);
+      if (dLat < 0.35 && dLng < 0.35) {
+        finishSelection();
+        return;
+      }
+    }
+
+    // Add new point (lat/lng geographic coordinates)
+    polygonPoints.push({
+      lat: Number(lat.toFixed(4)),
+      lng: Number(lng.toFixed(4))
+    });
+
+    renderPolygonLayers(true);
+    updateDrawUI();
+  });
+
+  // ── Tab Switchers: Custom Area vs Country Preset ───────────────────────────
+  tabCustom.addEventListener('click', () => {
+    activeMode = 'custom';
+    tabCustom.classList.add('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/40');
+    tabCustom.classList.remove('text-slate-400');
+    tabCountry.classList.remove('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/40');
+    tabCountry.classList.add('text-slate-400');
+
+    sectionCustomDraw.classList.remove('hidden');
+    sectionCountry.classList.add('hidden');
+
+    // Restore custom area layers
+    renderPolygonLayers(true);
+  });
+
+  tabCountry.addEventListener('click', () => {
+    activeMode = 'country';
+    tabCountry.classList.add('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/40');
+    tabCountry.classList.remove('text-slate-400');
+    tabCustom.classList.remove('bg-sky-500/20', 'text-sky-300', 'border', 'border-sky-500/40');
+    tabCustom.classList.add('text-slate-400');
+
+    sectionCountry.classList.remove('hidden');
+    sectionCustomDraw.classList.add('hidden');
+
+    // Exit drawing mode if open
+    if (isDrawing) {
+      isDrawing = false;
+      updateDrawUI();
+    }
+  });
+
+  // ── Drawing Control Event Listeners ────────────────────────────────────────
+  btnDrawMode.addEventListener('click', toggleDrawMode);
+  btnFinishDraw.addEventListener('click', finishSelection);
+  bannerBtnFinish.addEventListener('click', finishSelection);
+  btnUndoDraw.addEventListener('click', undoPoint);
+  bannerBtnUndo.addEventListener('click', undoPoint);
+  btnClearDraw.addEventListener('click', clearCustomArea);
+  bannerBtnCancel.addEventListener('click', () => {
+    isDrawing = false;
+    updateDrawUI();
+  });
+
+  // ── Palette Change Handler ─────────────────────────────────────────────────
+  selPalette.addEventListener('change', () => {
+    currentPaletteKey = selPalette.value;
+    updateLegendUI();
+    world.hexTopColor(d => getHexColor(d.points.length));
+  });
+
+  // ── Load Balkan GeoJSON boundaries (for Country mode) ──────────────────────
   fetch('/data/balkans.geojson')
     .then(res => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -232,98 +567,83 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     .then(data => {
       balkanGeoJson = data;
-      if (selCountry && selCountry.value) {
-        highlightCountry(selCountry.value);
-      }
     })
     .catch(err => {
-      console.warn('balkans.geojson fetch notice:', err);
+      console.warn('balkans.geojson notice:', err);
     });
 
-  // ── Helper: Outline Country on Globe ───────────────────────────────────────
-  function highlightCountry(country) {
-    if (!balkanGeoJson || !balkanGeoJson.features) return;
-    try {
-      const feature = balkanGeoJson.features.find(f => f.properties && f.properties.key === country);
-      if (feature) {
-        world.polygonsData([feature]);
-      } else {
-        world.polygonsData([]);
-      }
-    } catch (e) {
-      console.warn('highlightCountry error:', e);
-    }
-  }
-
-  // ── Helper: Focus on country with closer zoom ──────────────────────────────
-  function zoomToCountry(country, duration = 1200) {
-    if (COUNTRY_POV[country]) {
-      world.pointOfView(COUNTRY_POV[country], duration);
-    }
-  }
-
-  // ── Palette Change Handler ─────────────────────────────────────────────────
-  if (selPalette) {
-    selPalette.addEventListener('change', () => {
-      currentPaletteKey = selPalette.value;
-      updateLegendUI();
-      // Re-apply color function to active hexagons immediately
-      world.hexTopColor(d => getHexColor(d.points.length));
-    });
-  }
-
-  // ── Country Dropdown Change: Zoom & Outline Immediately ────────────────────
+  // ── Country Dropdown Change ────────────────────────────────────────────────
   selCountry.addEventListener('change', () => {
     const country = selCountry.value;
     if (country) {
       world.hexBinPointsData([]);
-      activeFires = [];
+      world.pathsData([]);
       statusBox.classList.add('hidden');
       legendHex.classList.add('hidden');
 
-      zoomToCountry(country, 1200);
-      highlightCountry(country);
+      if (COUNTRY_POV[country]) {
+        world.pointOfView(COUNTRY_POV[country], 1200);
+      }
+
+      if (balkanGeoJson && balkanGeoJson.features) {
+        const feature = balkanGeoJson.features.find(f => f.properties && f.properties.key === country);
+        if (feature) world.polygonsData([feature]);
+      }
     }
   });
 
   // ── Clear Selection and Reset Handler ──────────────────────────────────────
-  if (btnClear) {
-    btnClear.addEventListener('click', () => {
-      // Reset dropdowns
-      selCountry.value = '';
-      populateSelects();
+  btnClear.addEventListener('click', () => {
+    clearCustomArea();
+    selCountry.value = '';
+    populateSelects();
 
-      // Clear layers
-      world.hexBinPointsData([]);
-      world.polygonsData([]);
-      activeFires = [];
+    world.hexBinPointsData([]);
+    world.polygonsData([]);
+    world.pathsData([]);
+    world.htmlElementsData([]);
 
-      // Hide results
-      statusBox.classList.add('hidden');
-      legendHex.classList.add('hidden');
+    statusBox.classList.add('hidden');
+    legendHex.classList.add('hidden');
 
-      // Fly camera back to Balkan Overview
-      world.pointOfView(BALKAN_OVERVIEW, 1200);
-    });
-  }
+    world.pointOfView(BALKAN_OVERVIEW, 1200);
+  });
 
-  // ── Show Fires Button Click ───────────────────────────────────────────────
-  btnExplore.addEventListener('click', async (e) => {
-    e.preventDefault();
-
-    const country   = selCountry.value;
+  // ── Query & Filter Fires for Active Mode ───────────────────────────────────
+  async function queryFiresForArea() {
     const yearFrom  = parseInt(document.getElementById('sel-year-from').value, 10);
     const monthFrom = parseInt(document.getElementById('sel-month-from').value, 10);
     const yearTo    = parseInt(document.getElementById('sel-year-to').value, 10);
     const monthTo   = parseInt(document.getElementById('sel-month-to').value, 10);
 
-    if (!country) {
-      showError('Please select a country from the dropdown.');
-      return;
-    }
     if (yearFrom > yearTo || (yearFrom === yearTo && monthFrom > monthTo)) {
       showError('Start date must be before end date.');
       return;
+    }
+
+    let url = `/api/fires?yearFrom=${yearFrom}&monthFrom=${monthFrom}&yearTo=${yearTo}&monthTo=${monthTo}`;
+
+    if (activeMode === 'custom') {
+      if (polygonPoints.length < 3) {
+        showError('Please draw and finish a polygon area on the map first.');
+        return;
+      }
+      // Calculate geographic bounding box of custom polygon
+      const lats = polygonPoints.map(p => p.lat);
+      const lngs = polygonPoints.map(p => p.lng);
+      const latMin = Math.min(...lats);
+      const latMax = Math.max(...lats);
+      const lngMin = Math.min(...lngs);
+      const lngMax = Math.max(...lngs);
+
+      url += `&latMin=${latMin}&latMax=${latMax}&lngMin=${lngMin}&lngMax=${lngMax}`;
+    } else {
+      const country = selCountry.value;
+      if (!country) {
+        showError('Please select a country from the dropdown or switch to Draw Area mode.');
+        return;
+      }
+      url += `&country=${encodeURIComponent(country)}`;
     }
 
     // UI loading state
@@ -335,15 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
     legendHex.classList.add('hidden');
     btnExplore.disabled = true;
 
-    // Zoom into close-up perspective and outline
-    zoomToCountry(country, 1000);
-    highlightCountry(country);
-
     try {
-      const url = `/api/fires?country=${encodeURIComponent(country)}`
-                + `&yearFrom=${yearFrom}&monthFrom=${monthFrom}`
-                + `&yearTo=${yearTo}&monthTo=${monthTo}`;
-
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -351,44 +663,74 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const fires = await res.json();
-
-      // ── STRICT POINT-IN-POLYGON FILTER: Exclude points outside national border ──
-      const countryFeature = balkanGeoJson?.features?.find(f => f.properties && f.properties.key === country);
       let insideFires = fires;
-      if (countryFeature && countryFeature.geometry) {
-        insideFires = fires.filter(f => isPointInGeometry(f.lng, f.lat, countryFeature.geometry));
+
+      // ── STRICT POINT-IN-POLYGON (PIP) FILTERING ────────────────────────────
+      if (activeMode === 'custom') {
+        insideFires = fires.filter(f => isPointInCustomPolygon(f.lng, f.lat, polygonPoints));
+      } else {
+        const country = selCountry.value;
+        const countryFeature = balkanGeoJson?.features?.find(f => f.properties && f.properties.key === country);
+        if (countryFeature && countryFeature.geometry) {
+          insideFires = fires.filter(f => isPointInGeometry(f.lng, f.lat, countryFeature.geometry));
+        }
       }
 
-      activeFires = insideFires;
+      statusLoading.style.display = 'none';
 
       if (!insideFires || insideFires.length === 0) {
-        statusLoading.style.display = 'none';
         world.hexBinPointsData([]);
-        showStatus(`No fire detections found within ${country} for this period.`);
+        showStatus(`No fire detections found within the selected ${activeMode === 'custom' ? 'custom area' : selCountry.value} for this period.`);
         return;
       }
 
-      // Render 2D Hexagons flush with surface
+      // Render 2D Hexagonal outerlayer strictly within selection
       world.hexBinPointsData(insideFires);
       legendHex.classList.remove('hidden');
 
-      // Results summary
-      statusLoading.style.display = 'none';
-      const truncated = fires.length >= 5000 ? ' (top intensity sample)' : '';
-      showStatus(`${insideFires.length.toLocaleString()} fires plotted strictly inside ${country} · ${MONTHS[monthFrom-1]} ${yearFrom} – ${MONTHS[monthTo-1]} ${yearTo}${truncated}`);
+      // Statistics calculations
+      const totalFires = insideFires.length;
+      const totalFRP = insideFires.reduce((sum, f) => sum + (f.frp || 0), 0);
+      const avgFRP = totalFRP / totalFires;
+
+      const areaDesc = activeMode === 'custom'
+        ? `Custom Boundary (${polygonPoints.length} vertices)`
+        : selCountry.value;
+
+      showStatus(`
+        <div class="space-y-1">
+          <div class="font-bold text-white flex items-center justify-between">
+            <span>🔥 ${totalFires.toLocaleString()} Fires Detected</span>
+            <span class="text-sky-400 font-mono text-[10px]">${areaDesc}</span>
+          </div>
+          <div class="text-[11px] text-slate-400">
+            Total FRP: <span class="text-rose-400 font-semibold">${totalFRP.toFixed(1)} MW</span> · 
+            Avg FRP: <span class="text-white">${avgFRP.toFixed(1)} MW</span>
+          </div>
+          <div class="text-[10px] text-slate-500">
+            ${MONTHS[monthFrom-1]} ${yearFrom} – ${MONTHS[monthTo-1]} ${yearTo}
+          </div>
+        </div>
+      `);
 
     } catch (err) {
       statusLoading.style.display = 'none';
-      showError(err.message || 'Failed to fetch fire data.');
+      showError(err.message || 'Failed to query fire data.');
     } finally {
       btnExplore.disabled = false;
     }
+  }
+
+  // Explore button triggers query
+  btnExplore.addEventListener('click', (e) => {
+    e.preventDefault();
+    queryFiresForArea();
   });
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  function showStatus(msg) {
+  // ── Status Helpers ─────────────────────────────────────────────────────────
+  function showStatus(html) {
     statusResult.classList.remove('hidden');
-    resultSummary.textContent = msg;
+    resultSummary.innerHTML = html;
     statusError.classList.add('hidden');
   }
 
