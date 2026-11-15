@@ -136,6 +136,21 @@
         </div>
       </div>
 
+      <!-- Visualization Mode Toggle -->
+      <div class="space-y-1.5">
+        <label class="block text-[11px] font-mono uppercase tracking-widest text-slate-500">Visualization Layer</label>
+        <div class="grid grid-cols-2 gap-1 p-1 bg-space-900 rounded-xl border border-slate-800">
+          <button id="btn-mode-hex" type="button"
+                  class="py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-red-500/20 text-red-400 border border-red-500/30 transition cursor-pointer">
+            <span>⬡ Hex Density</span>
+          </button>
+          <button id="btn-mode-dots" type="button"
+                  class="py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 text-slate-400 hover:text-white transition cursor-pointer">
+            <span>• Hotspot Dots</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Explore button -->
       <button id="btn-explore" type="button"
               class="w-full py-3 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed
@@ -157,8 +172,33 @@
         <div id="status-error" class="hidden text-xs text-red-400 font-mono"></div>
       </div>
 
-      <!-- Legend (shown after results) -->
-      <div id="legend" class="hidden rounded-xl border border-slate-800/80 bg-space-800/40 p-3.5 space-y-2.5">
+      <!-- Legend for Hex Density -->
+      <div id="legend-hex" class="hidden rounded-xl border border-slate-800/80 bg-space-800/40 p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-mono uppercase tracking-widest text-slate-400">Hex Density Scale</span>
+          <span class="text-[10px] font-mono text-red-400">Darker = Denser</span>
+        </div>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2 text-xs text-slate-300">
+            <span class="w-3.5 h-3.5 rounded-sm bg-[#450a0a] border border-red-950 shrink-0"></span> Dense Mega-Cluster (100+ fires)
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-300">
+            <span class="w-3.5 h-3.5 rounded-sm bg-[#7f1d1d] border border-red-900 shrink-0"></span> Heavy Cluster (40–99 fires)
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-300">
+            <span class="w-3.5 h-3.5 rounded-sm bg-[#b91c1c] border border-red-700 shrink-0"></span> Medium Cluster (15–39 fires)
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-300">
+            <span class="w-3.5 h-3.5 rounded-sm bg-[#ef4444] border border-red-500 shrink-0"></span> Moderate (5–14 fires)
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-300">
+            <span class="w-3.5 h-3.5 rounded-sm bg-[#fca5a5] border border-red-300 shrink-0"></span> Low (1–4 fires)
+          </div>
+        </div>
+      </div>
+
+      <!-- Legend for Dots -->
+      <div id="legend-dots" class="hidden rounded-xl border border-slate-800/80 bg-space-800/40 p-3.5 space-y-2.5">
         <span class="text-[10px] font-mono uppercase tracking-widest text-slate-500">Fire Intensity (FRP)</span>
         <div class="space-y-1.5">
           <div class="flex items-center gap-2 text-xs text-slate-400">
