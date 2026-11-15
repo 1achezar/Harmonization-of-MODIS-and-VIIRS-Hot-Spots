@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .pathPointLng(p => p.lng)
     .pathColor(() => '#38bdf8')
     .pathStroke(2.8)
-    .pathAltitude(0.00028)
+    .pathPointAlt(() => 0.00028)
 
     // HTML Elements layer: Draggable vertex handles at each polygon point
     .htmlElementsData([])
