@@ -1,4 +1,4 @@
-// ── Close-up POV coordinates per Balkan country ──────────────────────────────
+// ── Country center coordinates & close-up zoom altitude ─────────────────────
 const COUNTRY_POV = {
   'Albania':      { lat: 41.15, lng: 20.10, alt: 0.035 },
   'Bosnia':       { lat: 44.15, lng: 17.80, alt: 0.040 },
@@ -13,10 +13,68 @@ const COUNTRY_POV = {
   'Slovenia':     { lat: 46.10, lng: 14.80, alt: 0.026 },
 };
 
-const BALKAN_OVERVIEW = { lat: 42.5, lng: 21.5, alt: 0.42 };
+const BALKAN_OVERVIEW = { lat: 42.5, lng: 21.5, alt: 0.45 };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// ── Populate year & month dropdowns ──────────────────────────────────────────
+// ── Color Scales (Darker / deeper hue = denser fire activity) ─────────────────
+const COLOR_PALETTES = {
+  fire: {
+    name: 'Classic Fire',
+    ranks: [
+      { min: 100, label: 'Mega Cluster (100+)', color: 'rgba(69, 10, 10, 0.96)', hex: '#450a0a', border: '#1c0404' },
+      { min: 40,  label: 'Heavy (40–99)',      color: 'rgba(127, 29, 29, 0.94)', hex: '#7f1d1d', border: '#450a0a' },
+      { min: 15,  label: 'Medium (15–39)',     color: 'rgba(185, 28, 28, 0.90)', hex: '#b91c1c', border: '#7f1d1d' },
+      { min: 5,   label: 'Moderate (5–14)',    color: 'rgba(239, 68, 68, 0.85)', hex: '#ef4444', border: '#b91c1c' },
+      { min: 1,   label: 'Low (1–4 fires)',    color: 'rgba(252, 165, 165, 0.80)', hex: '#fca5a5', border: '#ef4444' }
+    ]
+  },
+  cividis: {
+    name: 'Cividis (Colorblind Safe)',
+    ranks: [
+      { min: 100, label: 'Mega Cluster (100+)', color: 'rgba(0, 32, 77, 0.96)',   hex: '#00204d', border: '#001026' },
+      { min: 40,  label: 'Heavy (40–99)',      color: 'rgba(62, 92, 122, 0.94)', hex: '#3e5c7a', border: '#00204d' },
+      { min: 15,  label: 'Medium (15–39)',     color: 'rgba(123, 127, 128, 0.90)', hex: '#7b7f80', border: '#3e5c7a' },
+      { min: 5,   label: 'Moderate (5–14)',    color: 'rgba(212, 177, 58, 0.85)', hex: '#d4b13a', border: '#7b7f80' },
+      { min: 1,   label: 'Low (1–4 fires)',    color: 'rgba(255, 232, 56, 0.85)', hex: '#ffe838', border: '#d4b13a' }
+    ]
+  },
+  viridis: {
+    name: 'Viridis (High Contrast)',
+    ranks: [
+      { min: 100, label: 'Mega Cluster (100+)', color: 'rgba(68, 1, 84, 0.96)',   hex: '#440154', border: '#22002b' },
+      { min: 40,  label: 'Heavy (40–99)',      color: 'rgba(59, 82, 139, 0.94)', hex: '#3b528b', border: '#440154' },
+      { min: 15,  label: 'Medium (15–39)',     color: 'rgba(33, 145, 140, 0.90)', hex: '#21918c', border: '#3b528b' },
+      { min: 5,   label: 'Moderate (5–14)',    color: 'rgba(94, 201, 98, 0.85)',  hex: '#5ec962', border: '#21918c' },
+      { min: 1,   label: 'Low (1–4 fires)',    color: 'rgba(253, 231, 37, 0.85)', hex: '#fde725', border: '#5ec962' }
+    ]
+  }
+};
+
+let currentPaletteKey = 'fire';
+
+function getHexColor(count) {
+  const ranks = COLOR_PALETTES[currentPaletteKey]?.ranks || COLOR_PALETTES.fire.ranks;
+  for (const rank of ranks) {
+    if (count >= rank.min) return rank.color;
+  }
+  return ranks[ranks.length - 1].color;
+}
+
+// ── Render Legend Swatches ───────────────────────────────────────────────────
+function updateLegendUI() {
+  const legendItems = document.getElementById('legend-items');
+  if (!legendItems) return;
+  const ranks = COLOR_PALETTES[currentPaletteKey]?.ranks || COLOR_PALETTES.fire.ranks;
+
+  legendItems.innerHTML = ranks.map(r => `
+    <div class="flex items-center gap-2 text-xs text-slate-300">
+      <span class="w-3.5 h-3.5 rounded-sm shrink-0" style="background:${r.hex}; border:1px solid ${r.border}"></span>
+      <span>${r.label}</span>
+    </div>
+  `).join('');
+}
+
+// ── Populate Year & Month Selects ────────────────────────────────────────────
 function populateSelects() {
   const yFrom = document.getElementById('sel-year-from');
   const yTo   = document.getElementById('sel-year-to');
@@ -40,37 +98,64 @@ function populateSelects() {
   });
 }
 
-// ── 2D Hexagon Color Scale: Denser fires = Darker red / maroon ──────────────
-function getHex2DColor(count) {
-  if (count >= 100) return 'rgba(59, 8, 8, 0.96)';     // Mega Cluster (#3b0808)
-  if (count >= 40)  return 'rgba(127, 29, 29, 0.94)';  // Heavy (#7f1d1d)
-  if (count >= 15)  return 'rgba(185, 28, 28, 0.90)';  // Medium (#b91c1c)
-  if (count >= 5)   return 'rgba(239, 68, 68, 0.85)';  // Moderate (#ef4444)
-  return 'rgba(252, 165, 165, 0.80)';                  // Low (#fca5a5)
+// ── Strict Point-In-Polygon (PIP) for Country Boundaries ─────────────────────
+function pointInRing(x, y, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > y) !== (yj > y)) &&
+                      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
 
-// ── Main Initialization ──────────────────────────────────────────────────────
+function isPointInGeometry(lng, lat, geom) {
+  if (!geom) return true;
+  if (geom.type === 'Polygon') {
+    const rings = geom.coordinates;
+    if (!pointInRing(lng, lat, rings[0])) return false;
+    for (let i = 1; i < rings.length; i++) {
+      if (pointInRing(lng, lat, rings[i])) return false; // In an inner hole
+    }
+    return true;
+  } else if (geom.type === 'MultiPolygon') {
+    for (const poly of geom.coordinates) {
+      if (pointInRing(lng, lat, poly[0])) {
+        let inHole = false;
+        for (let i = 1; i < poly.length; i++) {
+          if (pointInRing(lng, lat, poly[i])) { inHole = true; break; }
+        }
+        if (!inHole) return true;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+// ── Globe initialization & Event Handlers ────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 
   populateSelects();
+  updateLegendUI();
 
   const container    = document.getElementById('globe-container');
   const selCountry   = document.getElementById('sel-country');
+  const selPalette   = document.getElementById('sel-palette');
   const btnExplore   = document.getElementById('btn-explore');
-  const btnResetView = document.getElementById('btn-reset-view');
-  const btnToggle    = document.getElementById('btn-toggle-panel');
-  const panelBody    = document.getElementById('panel-body');
-  const toggleIcon   = document.getElementById('toggle-icon');
+  const btnClear     = document.getElementById('btn-clear');
   const statusBox    = document.getElementById('status-box');
   const statusLoading= document.getElementById('status-loading');
   const statusResult = document.getElementById('status-result');
   const statusError  = document.getElementById('status-error');
   const resultSummary= document.getElementById('result-summary');
   const legendHex    = document.getElementById('legend-hex');
-  const presetButtons= document.querySelectorAll('.btn-preset');
 
   let balkanGeoJson = null;
+  let activeFires   = [];
 
   // ── Init Globe.gl ──────────────────────────────────────────────────────────
   const world = Globe()(container)
@@ -79,60 +164,59 @@ document.addEventListener('DOMContentLoaded', () => {
     .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
     .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
 
-    // Natural Earth Blue Atmosphere (No red outline)
+    // Natural Earth Atmosphere (no red outline)
     .atmosphereColor('#38bdf8')
     .atmosphereAltitude(0.12)
 
-    // Country Boundary Polygon: Flush on Earth surface
+    // Seamless Country Border (Surface-Flush)
     .polygonsData([])
     .polygonCapColor(() => 'rgba(56, 189, 248, 0.08)')
     .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
     .polygonStrokeColor(() => '#38bdf8')
     .polygonAltitude(0.00015)
 
-    // 2D Hexagonal Grid: Surface-Flush (0.00015 altitude, high spherical curvature)
+    // 2D Hexagonal Grid: Surface-Flush on Earth
     .hexBinPointsData([])
     .hexBinPointLat(d => d.lat)
     .hexBinPointLng(d => d.lng)
     .hexBinPointWeight(d => d.frp || 1)
     .hexBinResolution(6.4)
     .hexMargin(0.04)
-    .hexTopCurvatureResolution(8)                      // Smoothly curves over sphere
-    .hexTopColor(d => getHex2DColor(d.points.length))  // Darker = denser fires
-    .hexSideColor(() => 'rgba(0, 0, 0, 0)')             // 0 sides = pure 2D surface skin
+    .hexTopCurvatureResolution(8)                      // Conforms smoothly to sphere
+    .hexTopColor(d => getHexColor(d.points.length))    // Dynamic color ramp
+    .hexSideColor(() => 'rgba(0, 0, 0, 0)')             // 0 sides = pure flat 2D skin
     .hexAltitude(0.0002)                               // Exact same level as earth surface
     .hexTransitionDuration(400)
     .hexLabel(d => `
       <div style="
-        background: rgba(3, 7, 18, 0.95);
-        border: 1px solid rgba(244, 63, 94, 0.5);
+        background: rgba(6, 11, 25, 0.95);
+        border: 1px solid rgba(239, 68, 68, 0.5);
         padding: 9px 13px;
         border-radius: 10px;
         font-family: 'JetBrains Mono', monospace;
         font-size: 11px;
         color: #cbd5e1;
-        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.85);">
-        <div style="font-weight: 700; font-size: 12px; color: #f43f5e; margin-bottom: 4px;">
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.85);">
+        <div style="font-weight: 700; font-size: 12px; color: #f87171; margin-bottom: 4px;">
           ⬡ Wildfire Surface Cluster
         </div>
         Fires in Cell: <span style="color:#fff; font-weight:700;">${d.points.length.toLocaleString()}</span><br/>
-        Total FRP: <span style="color:#f43f5e; font-weight:700;">${d.sumWeight.toFixed(1)} MW</span><br/>
+        Total FRP: <span style="color:#f87171; font-weight:700;">${d.sumWeight.toFixed(1)} MW</span><br/>
         Mean FRP: <span style="color:#fff;">${(d.sumWeight / d.points.length).toFixed(1)} MW</span>
       </div>`);
 
-  // Sharp rendering & natural terrain
   world.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   if (world.globeMaterial()) {
-    world.globeMaterial().bumpScale = 1.0; // Clean, natural surface without jagged displacement
+    world.globeMaterial().bumpScale = 1.0;
   }
 
   const controls = world.controls();
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.minDistance   = 100.05; // Close-up camera inspection without sphere clipping
+  controls.minDistance   = 100.05;
   controls.maxDistance   = 500;
 
-  // Initial Balkan overview perspective
+  // Initial view centered over the Balkans
   world.pointOfView(BALKAN_OVERVIEW, 0);
 
   window.addEventListener('resize', () => {
@@ -153,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })
     .catch(err => {
-      console.warn('balkans.geojson notice:', err);
+      console.warn('balkans.geojson fetch notice:', err);
     });
 
   // ── Helper: Outline Country on Globe ───────────────────────────────────────
@@ -171,18 +255,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ── Helper: Zoom to country closer perspective ─────────────────────────────
+  // ── Helper: Focus on country with closer zoom ──────────────────────────────
   function zoomToCountry(country, duration = 1200) {
     if (COUNTRY_POV[country]) {
       world.pointOfView(COUNTRY_POV[country], duration);
     }
   }
 
-  // ── Country Dropdown: Zoom and outline immediately ─────────────────────────
+  // ── Palette Change Handler ─────────────────────────────────────────────────
+  if (selPalette) {
+    selPalette.addEventListener('change', () => {
+      currentPaletteKey = selPalette.value;
+      updateLegendUI();
+      // Re-apply color function to active hexagons immediately
+      world.hexTopColor(d => getHexColor(d.points.length));
+    });
+  }
+
+  // ── Country Dropdown Change: Zoom & Outline Immediately ────────────────────
   selCountry.addEventListener('change', () => {
     const country = selCountry.value;
     if (country) {
       world.hexBinPointsData([]);
+      activeFires = [];
       statusBox.classList.add('hidden');
       legendHex.classList.add('hidden');
 
@@ -191,64 +286,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── Reset View Button ──────────────────────────────────────────────────────
-  if (btnResetView) {
-    btnResetView.addEventListener('click', () => {
-      world.pointOfView(BALKAN_OVERVIEW, 1000);
+  // ── Clear Selection and Reset Handler ──────────────────────────────────────
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      // Reset dropdowns
+      selCountry.value = '';
+      populateSelects();
+
+      // Clear layers
+      world.hexBinPointsData([]);
+      world.polygonsData([]);
+      activeFires = [];
+
+      // Hide results
+      statusBox.classList.add('hidden');
+      legendHex.classList.add('hidden');
+
+      // Fly camera back to Balkan Overview
+      world.pointOfView(BALKAN_OVERVIEW, 1200);
     });
   }
 
-  // ── Minimize / Expand Panel Button ─────────────────────────────────────────
-  if (btnToggle && panelBody && toggleIcon) {
-    let collapsed = false;
-    btnToggle.addEventListener('click', () => {
-      collapsed = !collapsed;
-      if (collapsed) {
-        panelBody.classList.add('hidden');
-        toggleIcon.style.transform = 'rotate(180deg)';
-      } else {
-        panelBody.classList.remove('hidden');
-        toggleIcon.style.transform = 'rotate(0deg)';
-      }
-    });
-  }
-
-  // ── Quick Presets ──────────────────────────────────────────────────────────
-  presetButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const preset = btn.dataset.preset;
-      const yFrom = document.getElementById('sel-year-from');
-      const yTo   = document.getElementById('sel-year-to');
-      const mFrom = document.getElementById('sel-month-from');
-      const mTo   = document.getElementById('sel-month-to');
-
-      presetButtons.forEach(b => {
-        b.classList.remove('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
-        b.classList.add('bg-surface-850', 'text-slate-300');
-      });
-      btn.classList.add('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
-      btn.classList.remove('bg-surface-850', 'text-slate-300');
-
-      if (preset === 'recent') {
-        yFrom.value = '2024';
-        mFrom.value = '1';
-        yTo.value   = '2026';
-        mTo.value   = '12';
-      } else if (preset === 'peak') {
-        yFrom.value = '2024';
-        mFrom.value = '6';  // June
-        yTo.value   = '2024';
-        mTo.value   = '9';  // September
-      } else if (preset === 'all') {
-        yFrom.value = '2000';
-        mFrom.value = '1';
-        yTo.value   = '2026';
-        mTo.value   = '12';
-      }
-    });
-  });
-
-  // ── Action Button Click: Query and Display Fires ───────────────────────────
+  // ── Show Fires Button Click ───────────────────────────────────────────────
   btnExplore.addEventListener('click', async (e) => {
     e.preventDefault();
 
@@ -276,8 +335,8 @@ document.addEventListener('DOMContentLoaded', () => {
     legendHex.classList.add('hidden');
     btnExplore.disabled = true;
 
-    // Zoom into close-up perspective
-    zoomToCountry(country, 900);
+    // Zoom into close-up perspective and outline
+    zoomToCountry(country, 1000);
     highlightCountry(country);
 
     try {
@@ -293,21 +352,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const fires = await res.json();
 
-      if (!fires || fires.length === 0) {
+      // ── STRICT POINT-IN-POLYGON FILTER: Exclude points outside national border ──
+      const countryFeature = balkanGeoJson?.features?.find(f => f.properties && f.properties.key === country);
+      let insideFires = fires;
+      if (countryFeature && countryFeature.geometry) {
+        insideFires = fires.filter(f => isPointInGeometry(f.lng, f.lat, countryFeature.geometry));
+      }
+
+      activeFires = insideFires;
+
+      if (!insideFires || insideFires.length === 0) {
         statusLoading.style.display = 'none';
         world.hexBinPointsData([]);
-        showStatus(`No fire detections found for ${country} in this date range.`);
+        showStatus(`No fire detections found within ${country} for this period.`);
         return;
       }
 
-      // Render 2D Hexagonal outerlayer flush with Earth surface
-      world.hexBinPointsData(fires);
+      // Render 2D Hexagons flush with surface
+      world.hexBinPointsData(insideFires);
       legendHex.classList.remove('hidden');
 
       // Results summary
       statusLoading.style.display = 'none';
-      const truncated = fires.length >= 5000 ? ' (top 5,000 intensity records)' : '';
-      showStatus(`${fires.length.toLocaleString()} fires plotted on surface 2D grid · ${MONTHS[monthFrom-1]} ${yearFrom} – ${MONTHS[monthTo-1]} ${yearTo}${truncated}`);
+      const truncated = fires.length >= 5000 ? ' (top intensity sample)' : '';
+      showStatus(`${insideFires.length.toLocaleString()} fires plotted strictly inside ${country} · ${MONTHS[monthFrom-1]} ${yearFrom} – ${MONTHS[monthTo-1]} ${yearTo}${truncated}`);
 
     } catch (err) {
       statusLoading.style.display = 'none';
@@ -317,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── Status Helpers ─────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
   function showStatus(msg) {
     statusResult.classList.remove('hidden');
     resultSummary.textContent = msg;

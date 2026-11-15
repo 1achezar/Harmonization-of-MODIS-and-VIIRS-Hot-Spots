@@ -6,265 +6,205 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Balkan Wildfire Harmonization – MODIS & VIIRS</title>
+  <title>Balkan Wildfires – MODIS + VIIRS</title>
 
-  <!-- Tailwind CSS & Globe.gl & Lucide Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/globe.gl"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <script>
     tailwind.config = {
       darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace']
-          },
-          colors: {
-            brand: {
-              50:  '#fff1f2',
-              500: '#f43f5e',
-              600: '#e11d48',
-              700: '#be123c'
-            },
-            surface: {
-              950: '#030712',
-              900: '#0b1120',
-              850: '#0f172a',
-              800: '#1e293b'
-            }
-          }
-        }
-      }
+      theme: { extend: {
+        fontFamily: { sans: ['Inter','system-ui','sans-serif'], mono: ['JetBrains Mono','monospace'] },
+        colors: { space: { 950:'#060b19', 900:'#0b1224', 800:'#111a33' } }
+      }}
     };
   </script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #030712; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #060b19; }
     #globe-container canvas { outline: none; }
 
-    /* Custom dropdown styling */
-    select {
-      -webkit-appearance: none;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      padding-right: 32px;
+    .panel { animation: slideIn .3s ease; }
+    @@keyframes slideIn { from { opacity:0; transform:translateX(-16px); } to { opacity:1; transform:none; } }
+
+    select, input[type=number] {
+      -webkit-appearance: none; appearance: none;
+      background-image: none;
+    }
+    select { 
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; 
     }
 
-    /* Modern glassmorphism panel */
-    .glass-card {
-      background: rgba(11, 17, 32, 0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 1px 1px rgba(255, 255, 255, 0.05);
-    }
-
-    /* Spinner */
-    .spinner {
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(244, 63, 94, 0.25);
-      border-top-color: #f43f5e;
-      border-radius: 50%;
-      animation: spin 0.65s linear infinite;
+    .spinner { 
+      width: 18px; height: 18px; border: 2px solid rgba(239,68,68,.3); border-top-color: #ef4444;
+      border-radius: 50%; animation: spin .7s linear infinite; 
     }
     @@keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Custom thin scrollbar */
+    /* scrollbar */
     .custom-scroll { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
-    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar { width: 3px; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
   </style>
 </head>
-<body class="font-sans text-slate-100 antialiased selection:bg-rose-500/30">
+<body class="font-sans text-slate-100 antialiased selection:bg-red-500/30">
 
-  <!-- 3D GLOBE CANVAS -->
+  <!-- GLOBE -->
   <div id="globe-container" class="fixed inset-0 z-0"></div>
 
-  <!-- TOP-RIGHT BRAND & OVERVIEW CONTROLS -->
-  <header class="fixed top-5 right-6 z-20 flex items-center gap-3">
-    <!-- Reset View to Balkans Button -->
-    <button id="btn-reset-view" type="button"
-            class="px-3.5 py-2 rounded-xl bg-surface-900/80 hover:bg-surface-800 backdrop-blur-xl border border-white/10
-                   text-xs font-semibold text-slate-200 hover:text-white transition shadow-lg flex items-center gap-2 cursor-pointer active:scale-95">
-      <i data-lucide="globe" class="w-3.5 h-3.5 text-rose-400"></i>
-      <span>Balkan View</span>
-    </button>
+  <!-- BRAND watermark top-right -->
+  <div class="fixed top-4 right-5 z-20 text-right select-none pointer-events-none">
+    <div class="text-xs font-bold text-white/60 tracking-tight">NasaSpaceAppsChallenge</div>
+    <div class="text-[10px] font-mono text-white/30 mt-0.5">MODIS + VIIRS · 2000–2026</div>
+  </div>
 
-    <!-- NASA Badge -->
-    <div class="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-surface-900/80 backdrop-blur-xl border border-white/10 shadow-lg select-none">
-      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-      <span class="text-xs font-semibold text-white/90">NASA Space Apps</span>
-      <span class="text-[10px] font-mono text-slate-400">MODIS + VIIRS</span>
-    </div>
-  </header>
-
-  <!-- MAIN FLOATING 2D UI CONTROLLER -->
+  <!-- CONTROL PANEL -->
   <aside id="panel"
-         class="glass-card fixed top-5 left-5 z-20 w-84 max-w-[calc(100vw-2.5rem)] max-h-[calc(100vh-2.5rem)]
-                rounded-2xl flex flex-col overflow-hidden transition-all duration-300">
+         class="panel fixed top-0 left-0 h-full z-20 w-72 max-w-[88vw]
+                bg-space-950/92 backdrop-blur-2xl border-r border-slate-800/70
+                flex flex-col shadow-2xl">
 
-    <!-- Card Header -->
-    <div class="px-5 py-4 border-b border-white/5 flex items-center justify-between shrink-0 bg-surface-950/40">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-500/20 to-orange-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-sm">
-          <i data-lucide="flame" class="w-4 h-4"></i>
+    <!-- Header -->
+    <div class="px-5 pt-5 pb-4 border-b border-slate-800/70 shrink-0">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+          <i data-lucide="flame" class="w-4 h-4 text-red-400"></i>
         </div>
         <div>
-          <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-            Wildfire Harmonizer
-          </h1>
-          <p class="text-[10px] font-mono text-slate-400">2D Surface Grid Explorer</p>
+          <div class="text-sm font-bold text-white leading-none">Balkan Wildfire Explorer</div>
+          <div class="text-[10px] font-mono text-slate-500 mt-0.5">Harmonized MODIS + VIIRS</div>
         </div>
       </div>
-
-      <!-- Collapse / Expand Toggle Button -->
-      <button id="btn-toggle-panel" type="button" title="Minimize / Expand"
-              class="w-8 h-8 rounded-xl hover:bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition cursor-pointer">
-        <i data-lucide="chevron-up" id="toggle-icon" class="w-4 h-4 transition-transform duration-200"></i>
-      </button>
     </div>
 
-    <!-- Scrollable Panel Body -->
-    <div id="panel-body" class="flex-1 px-5 py-4 space-y-4 overflow-y-auto custom-scroll">
+    <!-- Form -->
+    <div class="flex-1 px-4 py-5 space-y-4 overflow-y-auto custom-scroll">
 
-      <!-- 1. Country Selection -->
+      <!-- Country -->
       <div class="space-y-1.5">
-        <label for="sel-country" class="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-slate-400">
-          <span>Target Country</span>
-          <span class="text-rose-400 font-sans text-[11px] font-medium">Balkans</span>
-        </label>
+        <label for="sel-country" class="block text-[11px] font-mono uppercase tracking-widest text-slate-500">Country</label>
         <select id="sel-country"
-                class="w-full px-3.5 py-2.5 rounded-xl bg-surface-950/80 border border-slate-700/70
-                       text-xs font-semibold text-white focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500/30 transition cursor-pointer">
-          <option value="" disabled selected>Choose a country to zoom…</option>
-          <option value="Albania">🇦🇱 Albania</option>
-          <option value="Bosnia">🇧🇦 Bosnia &amp; Herzegovina</option>
-          <option value="Bulgaria">🇧🇬 Bulgaria</option>
-          <option value="Croatia">🇭🇷 Croatia</option>
-          <option value="Greece">🇬🇷 Greece</option>
-          <option value="Kosovo">🇽🇰 Kosovo</option>
-          <option value="Montenegro">🇲🇪 Montenegro</option>
-          <option value="N. Macedonia">🇲🇰 North Macedonia</option>
-          <option value="Romania">🇷🇴 Romania</option>
-          <option value="Serbia">🇷🇸 Serbia</option>
-          <option value="Slovenia">🇸🇮 Slovenia</option>
+                class="w-full px-3 py-2.5 rounded-xl bg-space-800 border border-slate-700/70
+                       text-sm text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
+          <option value="" disabled selected>Select a country…</option>
+          <option value="Albania">Albania</option>
+          <option value="Bosnia">Bosnia &amp; Herzegovina</option>
+          <option value="Bulgaria">Bulgaria</option>
+          <option value="Croatia">Croatia</option>
+          <option value="Greece">Greece</option>
+          <option value="Kosovo">Kosovo</option>
+          <option value="Montenegro">Montenegro</option>
+          <option value="N. Macedonia">North Macedonia</option>
+          <option value="Romania">Romania</option>
+          <option value="Serbia">Serbia</option>
+          <option value="Slovenia">Slovenia</option>
         </select>
       </div>
 
-      <!-- 2. Quick Presets -->
+      <!-- Period -->
       <div class="space-y-1.5">
-        <label class="block text-[10px] font-mono uppercase tracking-wider text-slate-400">Quick Range</label>
-        <div class="grid grid-cols-3 gap-1.5 text-[11px]">
-          <button type="button" data-preset="recent"
-                  class="btn-preset px-2 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 border border-white/5 text-slate-300 hover:text-white font-medium text-center transition cursor-pointer">
-            2024–2026
-          </button>
-          <button type="button" data-preset="peak"
-                  class="btn-preset px-2 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 border border-white/5 text-slate-300 hover:text-white font-medium text-center transition cursor-pointer">
-            Peak '24
-          </button>
-          <button type="button" data-preset="all"
-                  class="btn-preset px-2 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 border border-white/5 text-slate-300 hover:text-white font-medium text-center transition cursor-pointer">
-            2000–2026
-          </button>
-        </div>
-      </div>
-
-      <!-- 3. Custom Date Range Pickers -->
-      <div class="space-y-1.5">
-        <label class="block text-[10px] font-mono uppercase tracking-wider text-slate-400">Custom Date Range</label>
+        <label class="block text-[11px] font-mono uppercase tracking-widest text-slate-500">Time Period</label>
         <div class="grid grid-cols-2 gap-2">
           <!-- From -->
           <div class="space-y-1">
-            <span class="text-[9px] font-mono text-slate-500 uppercase">From</span>
-            <select id="sel-year-from" class="w-full px-2.5 py-1.5 rounded-lg bg-surface-950/80 border border-slate-700/60 text-xs font-mono text-white focus:outline-none focus:border-rose-500 transition cursor-pointer"></select>
-            <select id="sel-month-from" class="w-full px-2.5 py-1.5 rounded-lg bg-surface-950/80 border border-slate-700/60 text-xs font-mono text-white focus:outline-none focus:border-rose-500 transition cursor-pointer"></select>
+            <span class="text-[10px] font-mono text-slate-600">From</span>
+            <select id="sel-year-from"
+                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                           text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
+            </select>
+            <select id="sel-month-from"
+                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                           text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
+            </select>
           </div>
           <!-- To -->
           <div class="space-y-1">
-            <span class="text-[9px] font-mono text-slate-500 uppercase">To</span>
-            <select id="sel-year-to" class="w-full px-2.5 py-1.5 rounded-lg bg-surface-950/80 border border-slate-700/60 text-xs font-mono text-white focus:outline-none focus:border-rose-500 transition cursor-pointer"></select>
-            <select id="sel-month-to" class="w-full px-2.5 py-1.5 rounded-lg bg-surface-950/80 border border-slate-700/60 text-xs font-mono text-white focus:outline-none focus:border-rose-500 transition cursor-pointer"></select>
+            <span class="text-[10px] font-mono text-slate-600">To</span>
+            <select id="sel-year-to"
+                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                           text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
+            </select>
+            <select id="sel-month-to"
+                    class="w-full px-2.5 py-2 rounded-lg bg-space-800 border border-slate-700/70
+                           text-xs font-mono text-white focus:outline-none focus:border-red-500/60 transition cursor-pointer">
+            </select>
           </div>
         </div>
       </div>
 
-      <!-- 4. Action Button -->
-      <button id="btn-explore" type="button"
-              class="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-orange-500 hover:from-rose-500 hover:to-orange-400
-                     disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wide transition-all
-                     shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]">
-        <i data-lucide="search" class="w-3.5 h-3.5"></i>
-        <span>Show Wildfires</span>
-      </button>
+      <!-- Color Vision / Accessibility Palette -->
+      <div class="space-y-1.5">
+        <label for="sel-palette" class="flex items-center justify-between text-[11px] font-mono uppercase tracking-widest text-slate-500">
+          <span>Color Palette</span>
+          <span class="text-[10px] text-cyan-400 font-sans font-medium">Accessible</span>
+        </label>
+        <select id="sel-palette"
+                class="w-full px-3 py-2 rounded-xl bg-space-800 border border-slate-700/70
+                       text-xs font-mono text-white focus:outline-none focus:border-cyan-500/60 transition cursor-pointer">
+          <option value="fire" selected>🔥 Classic Fire (Red Ramp)</option>
+          <option value="cividis">👁️ Cividis (Colorblind Safe)</option>
+          <option value="viridis">🌈 Viridis (High Contrast)</option>
+        </select>
+      </div>
 
-      <!-- 5. Status Feedback -->
-      <div id="status-box" class="hidden rounded-xl border border-white/5 bg-surface-950/80 p-3 space-y-1.5">
-        <div id="status-loading" class="hidden items-center gap-2 text-xs text-slate-300">
+      <!-- Action Buttons: Explore & Clear -->
+      <div class="space-y-2 pt-1">
+        <button id="btn-explore" type="button"
+                class="w-full py-3 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed
+                       text-white font-bold text-sm transition shadow-lg shadow-red-500/20
+                       flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]">
+          <i data-lucide="search" class="w-4 h-4"></i>
+          <span>Show Fires</span>
+        </button>
+
+        <button id="btn-clear" type="button"
+                class="w-full py-2.5 rounded-xl bg-space-800/80 hover:bg-space-800 border border-slate-700/60
+                       text-slate-400 hover:text-slate-200 text-xs font-mono transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98]">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span>Clear Selection &amp; Reset</span>
+        </button>
+      </div>
+
+      <!-- Status / results -->
+      <div id="status-box" class="hidden rounded-xl border border-slate-800/80 bg-space-800/50 p-3.5 space-y-2">
+        <div id="status-loading" class="hidden items-center gap-2 text-xs text-slate-400">
           <div class="spinner shrink-0"></div>
-          <span>Querying Supabase database…</span>
+          <span>Querying database…</span>
         </div>
         <div id="status-result" class="hidden">
-          <div class="text-[11px] font-mono text-slate-300 leading-relaxed" id="result-summary"></div>
+          <div class="text-xs font-mono text-slate-400 leading-relaxed" id="result-summary"></div>
         </div>
-        <div id="status-error" class="hidden text-xs text-rose-400 font-mono"></div>
+        <div id="status-error" class="hidden text-xs text-red-400 font-mono"></div>
       </div>
 
-      <!-- 6. 2D Surface Hexagon Legend -->
-      <div id="legend-hex" class="hidden rounded-xl border border-white/5 bg-surface-950/60 p-3 space-y-2">
+      <!-- 2D Hexagon Density Legend -->
+      <div id="legend-hex" class="hidden rounded-xl border border-slate-800/80 bg-space-800/40 p-3.5 space-y-2.5">
         <div class="flex items-center justify-between">
-          <span class="text-[9px] font-mono uppercase tracking-widest text-slate-400">2D Hex Density</span>
-          <span class="text-[9px] font-mono text-rose-400 font-semibold">Darker = Denser</span>
+          <span class="text-[10px] font-mono uppercase tracking-widest text-slate-400">Hex Density Scale</span>
+          <span class="text-[10px] font-mono text-red-400" id="legend-density-tag">Darker = Denser</span>
         </div>
-        <div class="space-y-1">
-          <div class="flex items-center gap-2 text-[11px] text-slate-300">
-            <span class="w-3.5 h-3.5 rounded-sm bg-[#3b0808] border border-rose-950 shrink-0"></span>
-            <span>Mega Cluster <span class="text-slate-500 text-[10px]">(100+ fires)</span></span>
-          </div>
-          <div class="flex items-center gap-2 text-[11px] text-slate-300">
-            <span class="w-3.5 h-3.5 rounded-sm bg-[#7f1d1d] border border-rose-900 shrink-0"></span>
-            <span>Heavy <span class="text-slate-500 text-[10px]">(40–99 fires)</span></span>
-          </div>
-          <div class="flex items-center gap-2 text-[11px] text-slate-300">
-            <span class="w-3.5 h-3.5 rounded-sm bg-[#b91c1c] border border-rose-700 shrink-0"></span>
-            <span>Medium <span class="text-slate-500 text-[10px]">(15–39 fires)</span></span>
-          </div>
-          <div class="flex items-center gap-2 text-[11px] text-slate-300">
-            <span class="w-3.5 h-3.5 rounded-sm bg-[#ef4444] border border-rose-500 shrink-0"></span>
-            <span>Moderate <span class="text-slate-500 text-[10px]">(5–14 fires)</span></span>
-          </div>
-          <div class="flex items-center gap-2 text-[11px] text-slate-300">
-            <span class="w-3.5 h-3.5 rounded-sm bg-[#fca5a5] border border-rose-300 shrink-0"></span>
-            <span>Low <span class="text-slate-500 text-[10px]">(1–4 fires)</span></span>
-          </div>
+        <div class="space-y-1.5" id="legend-items">
+          <!-- Dynamic legend swatches generated by JS based on chosen palette -->
         </div>
       </div>
 
     </div>
 
-    <!-- Card Footer -->
-    <div class="px-5 py-2.5 border-t border-white/5 bg-surface-950/40 flex items-center justify-between text-[10px] font-mono text-slate-400 shrink-0">
-      <span class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-        Flush 2D Hex Layer
-      </span>
-      <span class="text-slate-400">959,664 Records</span>
+    <!-- Footer -->
+    <div class="shrink-0 px-4 py-3 border-t border-slate-800/70 text-[10px] font-mono text-slate-600 flex items-center justify-between">
+      <span>Surface 2D Grid</span>
+      <span>959K+ records</span>
     </div>
   </aside>
 
-  <!-- Globe script -->
   <script src="~/js/globe-explorer.js" asp-append-version="true"></script>
 </body>
 </html>
