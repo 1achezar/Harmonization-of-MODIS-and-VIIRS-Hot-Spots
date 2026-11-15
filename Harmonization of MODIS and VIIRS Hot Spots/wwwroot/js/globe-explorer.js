@@ -39,27 +39,13 @@ function populateSelects() {
   });
 }
 
-// ── Hexagon Color Scales: Denser/More Fires = Darker Red/Crimson ─────────────
-function getHexTopColor(count, sumFrp) {
-  if (count >= 100) return 'rgba(69, 10, 10, 0.98)';   // Deepest dark maroon (#450a0a)
-  if (count >= 40)  return 'rgba(127, 29, 29, 0.96)';  // Dark blood-red (#7f1d1d)
-  if (count >= 15)  return 'rgba(185, 28, 28, 0.92)';  // Dark crimson (#b91c1c)
-  if (count >= 5)   return 'rgba(239, 68, 68, 0.88)';  // Vibrant fire red (#ef4444)
-  return 'rgba(252, 165, 165, 0.82)';                  // Light coral red (#fca5a5)
-}
-
-function getHexSideColor(count, sumFrp) {
-  if (count >= 100) return 'rgba(35, 5, 5, 0.95)';
-  if (count >= 40)  return 'rgba(75, 12, 12, 0.90)';
-  if (count >= 15)  return 'rgba(120, 18, 18, 0.85)';
-  if (count >= 5)   return 'rgba(180, 25, 25, 0.80)';
-  return 'rgba(230, 120, 120, 0.70)';
-}
-
-function frpColor(frp) {
-  if (frp >= 150) return '#ef4444';   // High FRP (bright red)
-  if (frp >= 50)  return '#f87171';   // Medium FRP (medium red)
-  return '#fca5a5';                   // Low FRP (soft red)
+// ── 2D Hexagon Color Scale: Denser/More Fires = Darker Red/Crimson ───────────
+function getHex2DColor(count) {
+  if (count >= 100) return 'rgba(69, 10, 10, 0.96)';   // Deepest dark maroon (#450a0a)
+  if (count >= 40)  return 'rgba(127, 29, 29, 0.94)';  // Dark blood-red (#7f1d1d)
+  if (count >= 15)  return 'rgba(185, 28, 28, 0.90)';  // Dark crimson (#b91c1c)
+  if (count >= 5)   return 'rgba(239, 68, 68, 0.85)';  // Vibrant fire red (#ef4444)
+  return 'rgba(252, 165, 165, 0.80)';                  // Light coral red (#fca5a5)
 }
 
 // ── Globe initialization & Event Handlers ────────────────────────────────────
@@ -71,19 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const container    = document.getElementById('globe-container');
   const selCountry   = document.getElementById('sel-country');
   const btnExplore   = document.getElementById('btn-explore');
-  const btnModeHex   = document.getElementById('btn-mode-hex');
-  const btnModeDots  = document.getElementById('btn-mode-dots');
   const statusBox    = document.getElementById('status-box');
   const statusLoading= document.getElementById('status-loading');
   const statusResult = document.getElementById('status-result');
   const statusError  = document.getElementById('status-error');
   const resultSummary= document.getElementById('result-summary');
   const legendHex    = document.getElementById('legend-hex');
-  const legendDots   = document.getElementById('legend-dots');
 
   let balkanGeoJson = null;
-  let currentFires  = [];
-  let currentMode   = 'hex'; // 'hex' or 'dots'
 
   // ── Init Globe.gl ──────────────────────────────────────────────────────────
   const world = Globe()(container)
@@ -92,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
     .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
 
-    // ── Natural Earth Atmospheric Glow (Soft sky-blue) ──
+    // ── Natural Earth Atmosphere ──
     .atmosphereColor('#38bdf8')
     .atmosphereAltitude(0.12)
 
@@ -101,19 +82,19 @@ document.addEventListener('DOMContentLoaded', () => {
     .polygonCapColor(() => 'rgba(56, 189, 248, 0.08)')
     .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
     .polygonStrokeColor(() => '#38bdf8')
-    .polygonAltitude(0.005)
+    .polygonAltitude(0.004)
 
-    // ── Hexagonal Density Binning Layer ──
+    // ── Flat 2D Hexagonal Outer Layer (Skin on the Globe) ──
     .hexBinPointsData([])
     .hexBinPointLat(d => d.lat)
     .hexBinPointLng(d => d.lng)
     .hexBinPointWeight(d => d.frp || 1)
     .hexBinResolution(6.2)
-    .hexMargin(0.12)
-    .hexTopCurvatureResolution(2)
-    .hexTopColor(d => getHexTopColor(d.points.length, d.sumWeight))
-    .hexSideColor(d => getHexSideColor(d.points.length, d.sumWeight))
-    .hexAltitude(d => Math.max(0.008, Math.min(0.055, (Math.log(d.points.length + 1) / 4) * 0.045 + 0.005)))
+    .hexMargin(0.08)
+    .hexTopCurvatureResolution(5)                      // Smooth spherical curve
+    .hexTopColor(d => getHex2DColor(d.points.length))  // Denser = Darker
+    .hexSideColor(() => 'rgba(0, 0, 0, 0)')             // 0 sides = Pure 2D flat skin
+    .hexAltitude(0.005)                                // Flush on globe surface
     .hexTransitionDuration(600)
     .hexLabel(d => `
       <div style="
@@ -126,38 +107,11 @@ document.addEventListener('DOMContentLoaded', () => {
         color: #cbd5e1;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);">
         <div style="font-weight: 700; font-size: 12px; color: #f87171; margin-bottom: 4px;">
-          ⬡ Wildfire Cluster
+          ⬡ 2D Wildfire Hexagon
         </div>
-        Fires in Hexagon: <span style="color:#fff; font-weight:700;">${d.points.length}</span><br/>
+        Fires in Cell: <span style="color:#fff; font-weight:700;">${d.points.length}</span><br/>
         Total FRP: <span style="color:#f87171; font-weight:700;">${d.sumWeight.toFixed(1)} MW</span><br/>
         Avg FRP: <span style="color:#fff;">${(d.sumWeight / d.points.length).toFixed(1)} MW</span>
-      </div>`)
-
-    // ── Hotspot Points Layer (Optional Dots view) ──
-    .pointsData([])
-    .pointLat('lat')
-    .pointLng('lng')
-    .pointColor('color')
-    .pointAltitude('alt')
-    .pointRadius('radius')
-    .pointResolution(14)
-    .pointLabel(d => `
-      <div style="
-        background: rgba(6, 11, 25, 0.96);
-        border: 1px solid rgba(239, 68, 68, 0.6);
-        padding: 9px 12px;
-        border-radius: 10px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        color: #cbd5e1;
-        min-width: 175px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);">
-        <div style="font-weight: 700; font-size: 12px; color: #f87171; margin-bottom: 5px;">
-          🔥 Wildfire Detection
-        </div>
-        Coords: ${d.lat.toFixed(3)}°N, ${d.lng.toFixed(3)}°E<br/>
-        FRP: <span style="color:#fff; font-weight:600;">${d.frp.toFixed(1)} MW</span><br/>
-        Period: <span style="color:#fff;">${MONTHS[d.month - 1]} ${d.year}</span>
       </div>`);
 
   // Crisp Retina / High-DPI rendering
@@ -216,63 +170,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ── Helper: Render Fires in Current Mode ───────────────────────────────────
-  function renderFiresData() {
-    if (!currentFires || currentFires.length === 0) {
-      world.hexBinPointsData([]);
-      world.pointsData([]);
-      return;
-    }
-
-    if (currentMode === 'hex') {
-      world.pointsData([]);
-      world.hexBinPointsData(currentFires);
-      legendHex.classList.remove('hidden');
-      legendDots.classList.add('hidden');
-    } else {
-      world.hexBinPointsData([]);
-      const maxFrp = Math.max(...currentFires.map(f => f.frp || 1));
-      const points = currentFires.map(f => ({
-        lat:    f.lat,
-        lng:    f.lng,
-        frp:    f.frp,
-        year:   f.year,
-        month:  f.month,
-        color:  frpColor(f.frp),
-        alt:    Math.max(0.010, Math.min(0.06, f.frp / (maxFrp * 3))),
-        radius: Math.max(0.12, Math.min(0.40, f.frp / (maxFrp * 1.6))),
-      }));
-      world.pointsData(points);
-      legendHex.classList.add('hidden');
-      legendDots.classList.remove('hidden');
-    }
-  }
-
-  // ── Visualization Mode Toggles ─────────────────────────────────────────────
-  btnModeHex.addEventListener('click', () => {
-    currentMode = 'hex';
-    btnModeHex.className = 'py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-red-500/20 text-red-400 border border-red-500/30 transition cursor-pointer';
-    btnModeDots.className = 'py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 text-slate-400 hover:text-white transition cursor-pointer';
-    renderFiresData();
-  });
-
-  btnModeDots.addEventListener('click', () => {
-    currentMode = 'dots';
-    btnModeDots.className = 'py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-red-500/20 text-red-400 border border-red-500/30 transition cursor-pointer';
-    btnModeHex.className = 'py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 text-slate-400 hover:text-white transition cursor-pointer';
-    renderFiresData();
-  });
-
   // ── Country Dropdown Change: Zoom & Outline Immediately ────────────────────
   selCountry.addEventListener('change', () => {
     const country = selCountry.value;
     if (country) {
-      currentFires = [];
       world.hexBinPointsData([]);
-      world.pointsData([]);
       statusBox.classList.add('hidden');
       legendHex.classList.add('hidden');
-      legendDots.classList.add('hidden');
 
       zoomToCountry(country, 1200);
       highlightCountry(country);
@@ -305,7 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
     statusResult.classList.add('hidden');
     statusError.classList.add('hidden');
     legendHex.classList.add('hidden');
-    legendDots.classList.add('hidden');
     btnExplore.disabled = true;
 
     // Zoom even closer and ensure country outline
@@ -327,20 +230,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!fires || fires.length === 0) {
         statusLoading.style.display = 'none';
-        currentFires = [];
         world.hexBinPointsData([]);
-        world.pointsData([]);
         showStatus(`No fire detections found for ${country} in this period.`);
         return;
       }
 
-      currentFires = fires;
-      renderFiresData();
+      // Render 2D Hexagonal outerlayer
+      world.hexBinPointsData(fires);
+      legendHex.classList.remove('hidden');
 
       // Results summary
       statusLoading.style.display = 'none';
       const truncated = fires.length >= 5000 ? ' (showing top 5,000 by intensity)' : '';
-      showStatus(`${fires.length.toLocaleString()} fire events aggregated into density hexagons · ${MONTHS[monthFrom-1]} ${yearFrom} – ${MONTHS[monthTo-1]} ${yearTo}${truncated}`);
+      showStatus(`${fires.length.toLocaleString()} fire events rendered on 2D hexagon layer · ${MONTHS[monthFrom-1]} ${yearFrom} – ${MONTHS[monthTo-1]} ${yearTo}${truncated}`);
 
     } catch (err) {
       statusLoading.style.display = 'none';
