@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .polygonCapColor(() => 'rgba(56, 189, 248, 0.22)')
     .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
     .polygonStrokeColor(() => '#38bdf8')
-    .polygonAltitude(0.0002)
+    .polygonAltitude(0.0008)
 
     // Paths layer: Visible lines connecting points while drawing & boundary outline
     .pathsData([])
@@ -216,17 +216,17 @@ document.addEventListener('DOMContentLoaded', () => {
     .pathPointLat(p => p.lat)
     .pathPointLng(p => p.lng)
     .pathColor(() => '#38bdf8')
-    .pathStroke(2.8)
-    .pathPointAlt(() => 0.00028)
+    .pathStroke(3.2)
+    .pathPointAlt(() => 0.0012)
 
     // HTML Elements layer: Draggable vertex handles at each polygon point
     .htmlElementsData([])
     .htmlLat(d => d.lat)
     .htmlLng(d => d.lng)
-    .htmlAltitude(0.00035)
+    .htmlAltitude(0.0016)
     .htmlElement(d => createVertexElement(d))
 
-    // 2D Hexagonal Grid: Surface-Flush on Earth
+    // 2D Hexagonal Grid: Surface layer
     .hexBinPointsData([])
     .hexBinPointLat(d => d.lat)
     .hexBinPointLng(d => d.lng)
@@ -236,8 +236,15 @@ document.addEventListener('DOMContentLoaded', () => {
     .hexTopCurvatureResolution(8)                      // Smoothly curves over sphere
     .hexTopColor(d => getHexColor(d.points.length))    // Dynamic color ramp
     .hexSideColor(() => 'rgba(0, 0, 0, 0)')             // 0 sides = pure flat 2D skin
-    .hexAltitude(0.0002)                               // Exact same level as earth surface
+    .hexAltitude(0.0010)                               // Sits cleanly above polygon fill
     .hexTransitionDuration(400)
+    .pointerEventsFilter((obj, data) => {
+      // Don't capture pointer events on polygons or path lines so hover passes directly through to the hexagons underneath!
+      if (data && (data.type === 'Feature' || data.geometry || Array.isArray(data))) {
+        return false;
+      }
+      return true;
+    })
     .hexLabel(d => `
       <div style="
         background: rgba(6, 11, 25, 0.95);
@@ -259,6 +266,12 @@ document.addEventListener('DOMContentLoaded', () => {
   world.renderer().setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   if (world.globeMaterial()) {
     world.globeMaterial().bumpScale = 1.0;
+  }
+
+  const camera = world.camera();
+  if (camera) {
+    camera.near = 0.05;
+    camera.updateProjectionMatrix();
   }
 
   const controls = world.controls();
